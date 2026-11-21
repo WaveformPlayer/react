@@ -44,7 +44,7 @@
  * import {
  *   WaveformPlaylist,
  *   type WaveformPlaylistHandle,
- * } from '@arraypress/waveform-playlist-react';
+ * } from '@arraypress/waveform-react/playlist';
  *
  * function MyPlaylist() {
  *   const ref = useRef<WaveformPlaylistHandle>(null);

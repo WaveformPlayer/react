@@ -1,7 +1,7 @@
 /**
  * @module types
  * @description
- * Public TypeScript types for `@arraypress/waveform-bar-react`.
+ * Public TypeScript types for `@arraypress/waveform-react/bar`.
  *
  * Two component shapes:
  *

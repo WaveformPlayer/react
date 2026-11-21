@@ -1,7 +1,7 @@
 /**
  * @module types
  * @description
- * Public TypeScript types for `@arraypress/waveform-player-react`.
+ * Public TypeScript types for `@arraypress/waveform-react/player`.
  *
  * The shared option surface — `WaveformStyle`, `ColorPreset`,
  * `AudioMode`, `AudioPreload`, `ButtonAlign`, `WaveformMarker`,

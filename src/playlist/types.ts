@@ -1,7 +1,7 @@
 /**
  * @module types
  * @description
- * Public TypeScript types for `@arraypress/waveform-playlist-react`.
+ * Public TypeScript types for `@arraypress/waveform-react/playlist`.
  *
  * The shared option surface is owned by two core libraries and
  * re-exported / derived here rather than re-declared:

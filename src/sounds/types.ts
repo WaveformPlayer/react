@@ -1,7 +1,7 @@
 /**
  * @module types
  * @description
- * Public TypeScript types for `@arraypress/waveform-sounds-react`.
+ * Public TypeScript types for `@arraypress/waveform-react/sounds`.
  *
  * The option surface is owned by the core, `@arraypress/waveform-sounds`,
  * whose hand-written `index.d.ts` declares {@link WaveformSoundsOptions}.

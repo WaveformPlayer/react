@@ -1,12 +1,12 @@
 /**
- * @module @arraypress/waveform-sounds-react
+ * @module @arraypress/waveform-react/sounds
  * @description
  * Public entry point for the React wrapper around
  * `@arraypress/waveform-sounds`.
  *
  * ```tsx
  * import '@arraypress/waveform-player'; // the engine: window.WaveformPlayer
- * import { WaveformSounds } from '@arraypress/waveform-sounds-react';
+ * import { WaveformSounds } from '@arraypress/waveform-react/sounds';
  *
  * function App() {
  *   return (
@@ -38,7 +38,7 @@
  *   SoundsFilterControl,
  *   SoundsLoopFilter,
  *   SoundsColumn,
- * } from '@arraypress/waveform-sounds-react';
+ * } from '@arraypress/waveform-react/sounds';
  * ```
  */
 

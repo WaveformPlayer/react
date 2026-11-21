@@ -1,5 +1,5 @@
 /**
- * @module @arraypress/waveform-bar-react
+ * @module @arraypress/waveform-react/bar
  * @description
  * Public entry point for the React wrapper around
  * `@arraypress/waveform-bar`.
@@ -13,7 +13,7 @@
  *                             "play this track" element
  *
  * ```tsx
- * import { WaveformBar, WaveformBarTrigger } from '@arraypress/waveform-bar-react';
+ * import { WaveformBar, WaveformBarTrigger } from '@arraypress/waveform-react/bar';
  * ```
  */
 

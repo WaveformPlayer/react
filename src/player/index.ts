@@ -1,11 +1,11 @@
 /**
- * @module @arraypress/waveform-player-react
+ * @module @arraypress/waveform-react/player
  * @description
  * Public entry point for the React wrapper around
  * `@arraypress/waveform-player`.
  *
  * ```tsx
- * import { WaveformPlayer } from '@arraypress/waveform-player-react';
+ * import { WaveformPlayer } from '@arraypress/waveform-react/player';
  *
  * function App() {
  *   return <WaveformPlayer url="/audio/track.mp3" title="My Track" />;
@@ -25,7 +25,7 @@
  *   AudioMode,
  *   AudioPreload,
  *   ButtonAlign,
- * } from '@arraypress/waveform-player-react';
+ * } from '@arraypress/waveform-react/player';
  * ```
  */
 

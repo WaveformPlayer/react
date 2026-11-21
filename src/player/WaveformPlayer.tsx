@@ -22,7 +22,7 @@
  *
  * ```tsx
  * import { useRef, useEffect } from 'react';
- * import { WaveformPlayer, type WaveformPlayerHandle } from '@arraypress/waveform-player-react';
+ * import { WaveformPlayer, type WaveformPlayerHandle } from '@arraypress/waveform-react/player';
  *
  * function MyPlayer() {
  *   const ref = useRef<WaveformPlayerHandle>(null);
