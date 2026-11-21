@@ -5,20 +5,26 @@
  * Packs the package and installs the tarball into throwaway consumers, the
  * way a user gets it, to prove the sub-path design works:
  *
- *   1. The tarball holds dist/<name>/index.{js,cjs,d.ts,d.cts} for every
- *      component plus README / LICENSE / CHANGELOG, and no src/ or test/.
+ *   1. The tarball holds dist/<name>/index.{js,d.ts} for every component
+ *      plus README / LICENSE / CHANGELOG, no CommonJS (.cjs / .d.cts; ES
+ *      modules only since 2.0), and no src/ or test/.
  *   2. "full" consumer (react + all four cores): every sub-path imports in
- *      Node ESM and CJS with the expected export names, bundles with every
+ *      Node with `import` and with `require()` (Node 22.12+ loads ES modules
+ *      through require) with the expected export names, bundles with every
  *      import resolved, and typechecks under moduleResolution bundler and
  *      nodenext (ESM and CJS files) with this repo's TypeScript, and under
  *      node10 (via typesVersions) with TypeScript 6, since TS 7 removed node10.
  *   3. "player-only" consumer (react + @arraypress/waveform-player only):
- *      `./player` imports in Node ESM and CJS, typechecks, and BUNDLES (a
- *      bundler resolves the component's dynamic `import()` of its core at
- *      build time). Bundling counts an unresolved import as a failure
- *      (Rolldown, like Rollup, would otherwise only warn and leave it
- *      external). As a control, bundling `./bar` there must fail: that is
- *      the reason each component has its own sub-path.
+ *      `./player` imports, typechecks, and BUNDLES (a bundler resolves the
+ *      component's dynamic `import()` of its core at build time). Bundling
+ *      counts an unresolved import as a failure (Rolldown, like Rollup, would
+ *      otherwise only warn and leave it external). As a control, bundling
+ *      `./bar` there must fail: that is the reason each component has its own
+ *      sub-path.
+ *
+ * The cores come from this package's devDependencies: a `file:` path (the
+ * sibling 2.0 checkouts, until 2.0 is on npm) is packed and installed as a
+ * tarball, anything else is installed from npm by that range.
  *
  * Needs network access for `npm install`. npm 12 prints `npm pack --json`
  * as an object keyed by package name; older npm prints an array. Both are
@@ -59,18 +65,34 @@ const tryRun = (cmd, args, cwd) => {
 };
 
 // --- 1. pack ----------------------------------------------------------------
-const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', work], root));
-const info = Array.isArray(packed) ? packed[0] : (packed[pkg.name] ?? Object.values(packed)[0]);
-const tarball = join(work, info.filename);
-const files = info.files.map((f) => f.path).sort();
-console.log(`packed ${info.filename} (${files.length} files)`);
+/** `npm pack` `dir` into `work`; returns the tarball's path and file list. */
+function pack(dir) {
+	const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', work], dir));
+	const info = Array.isArray(packed) ? packed[0] : Object.values(packed)[0];
+	return { tarball: join(work, info.filename), files: info.files.map((f) => f.path).sort(), filename: info.filename };
+}
+
+const { tarball, files, filename } = pack(root);
+console.log(`packed ${filename} (${files.length} files)`);
 for (const name of Object.keys(COMPONENTS)) {
-	for (const ext of ['js', 'cjs', 'd.ts', 'd.cts']) {
+	for (const ext of ['js', 'd.ts']) {
 		check(files.includes(`dist/${name}/index.${ext}`), `tarball has dist/${name}/index.${ext}`);
 	}
 }
+check(!files.some((f) => /\.(cjs|d\.cts)$/.test(f)), 'tarball has no CommonJS (.cjs / .d.cts)');
 for (const f of ['README.md', 'LICENSE', 'CHANGELOG.md', 'package.json']) check(files.includes(f), `tarball has ${f}`);
 check(!files.some((f) => /^(src|test|examples|scripts)\//.test(f)), 'tarball has no src/, test/, examples/ or scripts/');
+
+/** What to `npm install` for a core: its packed sibling checkout, or its npm range. */
+const coreSpec = Object.fromEntries(
+	CORES.map((name) => {
+		const range = pkg.devDependencies[name];
+		if (!range.startsWith('file:')) return [name, `${name}@${range}`];
+		const core = pack(resolve(root, range.slice('file:'.length)));
+		console.log(`packed ${core.filename} (from ${range})`);
+		return [name, core.tarball];
+	})
+);
 
 // --- consumers --------------------------------------------------------------
 const tsc = join(root, 'node_modules/.bin/tsc');
@@ -79,7 +101,9 @@ function makeConsumer(label, deps) {
 	const dir = join(work, label);
 	mkdirSync(dir);
 	writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: `consumer-${label}`, private: true, type: 'module' }));
-	run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', tarball, 'react', '@types/react', ...deps], dir);
+	const react = `react@${pkg.peerDependencies.react}`;
+	const types = `@types/react@${pkg.devDependencies['@types/react']}`;
+	run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', tarball, react, types, ...deps], dir);
 	return dir;
 }
 
@@ -89,8 +113,10 @@ function nodeImports(dir, names) {
 		const want = JSON.stringify(COMPONENTS[name].exports);
 		const esm = tryRun('node', ['--input-type=module', '-e', `const m = await import('${spec}'); console.log(JSON.stringify(Object.keys(m).sort()))`], dir);
 		check(esm.ok && esm.out.trim() === want, `ESM  import('${spec}')`, esm.ok ? esm.out.trim() : esm.out.trim().split('\n')[0]);
-		const cjs = tryRun('node', ['--input-type=commonjs', '-e', `console.log(JSON.stringify(Object.keys(require('${spec}')).sort()))`], dir);
-		check(cjs.ok && cjs.out.trim() === want, `CJS  require('${spec}')`, cjs.ok ? cjs.out.trim() : cjs.out.trim().split('\n')[0]);
+		// require() of the ES module (Node 22.12+). Node adds a `__esModule`
+		// marker to the namespace it returns; the exports are otherwise the same.
+		const cjs = tryRun('node', ['--input-type=commonjs', '-e', `console.log(JSON.stringify(Object.keys(require('${spec}')).filter((k) => k !== '__esModule').sort()))`], dir);
+		check(cjs.ok && cjs.out.trim() === want, `require('${spec}')`, cjs.ok ? cjs.out.trim() : cjs.out.trim().split('\n')[0]);
 	}
 }
 
@@ -133,7 +159,7 @@ async function bundle(dir, name) {
 
 // --- 2. full consumer -------------------------------------------------------
 console.log('\nconsumer: react + all four cores');
-const full = makeConsumer('full', [...CORES, 'typescript@6']);
+const full = makeConsumer('full', [...CORES.map((name) => coreSpec[name]), 'typescript@6']);
 nodeImports(full, Object.keys(COMPONENTS));
 typecheck(full, Object.keys(COMPONENTS), ['bundler', 'nodenext (ESM)', 'nodenext (CJS)']);
 typecheck(full, Object.keys(COMPONENTS), ['node10'], join(full, 'node_modules/.bin/tsc'));
@@ -144,7 +170,7 @@ for (const name of Object.keys(COMPONENTS)) {
 
 // --- 3. player-only consumer ------------------------------------------------
 console.log('\nconsumer: react + @arraypress/waveform-player only');
-const only = makeConsumer('player-only', ['@arraypress/waveform-player']);
+const only = makeConsumer('player-only', [coreSpec['@arraypress/waveform-player']]);
 nodeImports(only, ['player']);
 typecheck(only, ['player'], ['bundler', 'nodenext (ESM)', 'nodenext (CJS)']);
 const playerBundle = await bundle(only, 'player');
