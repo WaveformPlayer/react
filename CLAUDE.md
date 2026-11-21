@@ -129,5 +129,5 @@ on anything that differs between server and client.
 
 ## Cross-repo
 An option change in a core is a family-wide batch: load the
-`waveform-release` skill. The package scope rename (`@waveformplayer/*`)
-happens later for every package at once: don't rename here.
+`waveform-release` skill. Package names stay `@arraypress/*` (decided
+2026-11-21: npm download counts don't transfer to a new name).
