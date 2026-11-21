@@ -1,0 +1,549 @@
+/**
+ * WaveformPlayer.tsx
+ * ------------------
+ *
+ * React wrapper around `@arraypress/waveform-player`. Mounts a player
+ * instance into a `<div>` on first render, tears it down on unmount,
+ * and re-mounts when any "identity" prop changes (the props whose
+ * change requires the library to start over from scratch — `url`,
+ * `audioMode`).
+ *
+ * For non-identity props, this component currently re-creates the
+ * instance as well, which is simpler than diffing every option and
+ * calling the right granular updater. The trade-off is acceptable
+ * because:
+ *
+ *   - The library re-uses any cached waveform data keyed by URL, so
+ *     re-mounts on the same URL are cheap.
+ *   - Per-render churn on a player widget is rare in practice.
+ *
+ * If you need finer control — imperative `loadTrack()`, `seekTo()`,
+ * `setVolume()`, etc. — grab the instance through a `ref`:
+ *
+ * ```tsx
+ * import { useRef, useEffect } from 'react';
+ * import { WaveformPlayer, type WaveformPlayerHandle } from '@arraypress/waveform-player-react';
+ *
+ * function MyPlayer() {
+ *   const ref = useRef<WaveformPlayerHandle>(null);
+ *   return (
+ *     <>
+ *       <WaveformPlayer ref={ref} url="/audio/track.mp3" />
+ *       <button onClick={() => ref.current?.seekTo(60)}>Jump to 1:00</button>
+ *     </>
+ *   );
+ * }
+ * ```
+ *
+ * ## Library setup
+ *
+ * This component does **not** load the core library's CSS for you.
+ * Import it once at your app entry:
+ *
+ * ```ts
+ * import '@arraypress/waveform-player/dist/waveform-player.css';
+ * ```
+ *
+ * The library's JS is imported dynamically inside `useEffect` so it
+ * only loads on the client (SSR-safe).
+ *
+ * @module WaveformPlayer
+ */
+import {
+	forwardRef,
+	useEffect,
+	useImperativeHandle,
+	useLayoutEffect,
+	useRef,
+	useState,
+	type ForwardedRef,
+} from 'react';
+// Aliased to avoid colliding with this file's own `WaveformPlayer`
+// component export. This is the core library's player class type.
+import type { WaveformPlayer as WaveformPlayerInstance } from '@arraypress/waveform-player';
+import type { WaveformPlayerHandle, WaveformPlayerProps } from './types';
+
+/**
+ * Convert a `WaveformPlayerProps` object into the option shape the
+ * core library accepts. Most fields pass straight through; this
+ * helper exists so the option-building logic is testable on its own
+ * and the component body stays focused on lifecycle.
+ *
+ * @param props - The component's resolved props.
+ * @returns An options object to pass into `new WaveformPlayer(el, …)`.
+ */
+function buildLibraryOptions(props: WaveformPlayerProps): Record<string, unknown> {
+	const opts: Record<string, unknown> = {};
+
+	/* Audio source — `src` is the core's shorthand alias for `url`. */
+	if (props.url !== undefined) opts.url = props.url;
+	else if (props.src !== undefined) opts.url = props.src;
+	if (props.audioMode !== undefined) opts.audioMode = props.audioMode;
+	if (props.preload !== undefined) opts.preload = props.preload;
+	if (props.crossOrigin !== undefined) opts.crossOrigin = props.crossOrigin;
+
+	/* Waveform visualisation */
+	if (props.waveformStyle !== undefined) opts.waveformStyle = props.waveformStyle;
+	if (props.height !== undefined) opts.height = props.height;
+	if (props.samples !== undefined) opts.samples = props.samples;
+	if (props.barWidth !== undefined) opts.barWidth = props.barWidth;
+	if (props.barSpacing !== undefined) opts.barSpacing = props.barSpacing;
+	if (props.barRadius !== undefined) opts.barRadius = props.barRadius;
+	if (props.waveformGradient !== undefined) opts.waveformGradient = props.waveformGradient;
+	if (props.waveform !== undefined && props.waveform !== null) {
+		opts.waveform = props.waveform;
+	}
+
+	/* Colours */
+	if (props.colorPreset !== undefined) opts.colorPreset = props.colorPreset;
+	if (props.waveformColor !== undefined) opts.waveformColor = props.waveformColor;
+	if (props.progressColor !== undefined) opts.progressColor = props.progressColor;
+
+	/* Playback controls */
+	if (props.playbackRate !== undefined) opts.playbackRate = props.playbackRate;
+	if (props.showPlaybackSpeed !== undefined) opts.showPlaybackSpeed = props.showPlaybackSpeed;
+	if (props.playbackRates !== undefined) opts.playbackRates = props.playbackRates;
+
+	/* UI toggles */
+	if (props.showControls !== undefined) opts.showControls = props.showControls;
+	if (props.showInfo !== undefined) opts.showInfo = props.showInfo;
+	if (props.showTime !== undefined) opts.showTime = props.showTime;
+	if (props.showHoverTime !== undefined) opts.showHoverTime = props.showHoverTime;
+	if (props.seekHandle !== undefined) opts.seekHandle = props.seekHandle;
+	if (props.showBPM !== undefined) opts.showBPM = props.showBPM;
+	if (props.bpm !== undefined) opts.bpm = props.bpm;
+	if (props.buttonAlign !== undefined) opts.buttonAlign = props.buttonAlign;
+	if (props.layout !== undefined) opts.layout = props.layout;
+	if (props.buttonStyle !== undefined) opts.buttonStyle = props.buttonStyle;
+	if (props.buttonSize !== undefined) opts.buttonSize = props.buttonSize;
+	if (props.buttonRadius !== undefined) opts.buttonRadius = props.buttonRadius;
+
+	/* Accessibility */
+	if (props.accessibleSeek !== undefined) opts.accessibleSeek = props.accessibleSeek;
+	if (props.seekLabel !== undefined) opts.seekLabel = props.seekLabel;
+	if (props.seekValueText !== undefined) opts.seekValueText = props.seekValueText;
+	if (props.playPauseLabel !== undefined) opts.playPauseLabel = props.playPauseLabel;
+	if (props.speedLabel !== undefined) opts.speedLabel = props.speedLabel;
+
+	/* Error UI */
+	if (props.errorText !== undefined) opts.errorText = props.errorText;
+
+	/* Markers */
+	if (props.markers !== undefined) opts.markers = props.markers;
+	if (props.showMarkers !== undefined) opts.showMarkers = props.showMarkers;
+
+	/* Content metadata */
+	if (props.title !== undefined) opts.title = props.title;
+	if (props.artist !== undefined) opts.artist = props.artist;
+	if (props.artwork !== undefined) opts.artwork = props.artwork;
+	if (props.artworkAlt !== undefined) opts.artworkAlt = props.artworkAlt;
+	if (props.artworkPosition !== undefined) opts.artworkPosition = props.artworkPosition;
+	if (props.album !== undefined) opts.album = props.album;
+	if (props.unknownTrackText !== undefined) opts.unknownTrackText = props.unknownTrackText;
+
+	/* Behaviour */
+	if (props.autoplay !== undefined) opts.autoplay = props.autoplay;
+	if (props.singlePlay !== undefined) opts.singlePlay = props.singlePlay;
+	if (props.playOnSeek !== undefined) opts.playOnSeek = props.playOnSeek;
+	if (props.enableMediaSession !== undefined) opts.enableMediaSession = props.enableMediaSession;
+
+	/* Icons */
+	if (props.playIcon !== undefined) opts.playIcon = props.playIcon;
+	if (props.pauseIcon !== undefined) opts.pauseIcon = props.pauseIcon;
+
+	/* Callbacks are intentionally NOT mapped here. They are wired in
+	 * the mount effect as *stable* wrapper functions that read the
+	 * latest handlers from `callbacksRef` at call time. That way a
+	 * parent re-render passing fresh inline callbacks is always seen
+	 * by the core without re-creating the player — and the callbacks
+	 * never capture stale first-mount state (stale-closure bug). */
+
+	return opts;
+}
+
+/**
+ * Split a class string into its tokens (empty strings dropped).
+ *
+ * @param value - A space-separated class list.
+ * @returns The individual class names.
+ */
+function classTokens(value: string): string[] {
+	return value.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Bring the host's *user* classes (`wfp-host` + `className`) up to date
+ * without touching anything else on the element: drop the tokens this
+ * component applied last time that are no longer wanted, then (re-)add
+ * every wanted token. `classList.add` is idempotent, so this is also how
+ * the tokens come back after the core's `createDOM()` resets the host's
+ * whole class list to `waveform-player` on construction.
+ *
+ * @param el - The host element.
+ * @param applied - Tokens this component applied on the previous sync.
+ * @param wanted - Tokens it wants now.
+ */
+function syncHostClasses(el: HTMLElement, applied: readonly string[], wanted: readonly string[]): void {
+	for (const token of applied) {
+		if (!wanted.includes(token)) el.classList.remove(token);
+	}
+	if (wanted.length) el.classList.add(...wanted);
+}
+
+/**
+ * `WaveformPlayer` — React component wrapping
+ * `@arraypress/waveform-player`.
+ *
+ * Render at the spot you want a waveform-driven audio player to
+ * appear. The container `<div>` is rendered immediately for layout;
+ * the actual player UI hydrates in once the library loads
+ * client-side.
+ *
+ * @example Basic
+ *   <WaveformPlayer url="/audio/track.mp3" title="My Track" />
+ *
+ * @example With ref for imperative control
+ *   const ref = useRef<WaveformPlayerHandle>(null);
+ *   <WaveformPlayer ref={ref} url={url} />
+ *   <button onClick={() => ref.current?.togglePlay()}>Play/Pause</button>
+ */
+export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerProps>(
+	function WaveformPlayer(props, ref: ForwardedRef<WaveformPlayerHandle>) {
+		const containerRef = useRef<HTMLDivElement | null>(null);
+		const instanceRef = useRef<unknown>(null);
+
+		/**
+		 * Host `class` handling.
+		 *
+		 * The core owns part of the host's class list: `createDOM()` resets it
+		 * to `waveform-player` (+ `waveform-layout-preview`,
+		 * `waveform-theme-light`) and later paths toggle
+		 * `waveform-is-placeholder`. If React owned the `class` attribute, a
+		 * `className`-only change — which rightly doesn't remount — would
+		 * rewrite it and strip those classes for good.
+		 *
+		 * So React renders the class **once**: `renderedClass` is frozen at the
+		 * first render (server markup and hydration still carry the user's
+		 * classes), and because the value never changes React never writes the
+		 * attribute again. Later `className` changes are applied here with
+		 * `classList`, touching only the tokens this component put there.
+		 *
+		 * Chosen over mounting the core into an inner element (which would
+		 * leave React's element alone by construction) because that changes the
+		 * DOM users style: `style={{ '--wfp-accent': … }}` or a `className`
+		 * setting the `--wfp-*` variables would land on a parent, where the
+		 * core's own `.waveform-player { --wfp-…: … }` defaults shadow them.
+		 */
+		const hostClass = ['wfp-host', props.className].filter(Boolean).join(' ');
+		const [renderedClass] = useState(hostClass);
+		const hostClassRef = useRef(hostClass);
+		hostClassRef.current = hostClass;
+		const appliedClassesRef = useRef<string[]>(classTokens(renderedClass));
+
+		/** Apply the latest `hostClass` to the host (see above). */
+		const applyHostClasses = () => {
+			const el = containerRef.current;
+			if (!el) return;
+			const wanted = classTokens(hostClassRef.current);
+			syncHostClasses(el, appliedClassesRef.current, wanted);
+			appliedClassesRef.current = wanted;
+		};
+
+		useLayoutEffect(applyHostClasses, [hostClass]);
+
+		/**
+		 * Latest user callbacks, kept in a ref so the wrappers handed to
+		 * the core (built once at mount, below) always invoke the most
+		 * recent handler instead of the ones captured on first mount.
+		 *
+		 * Initialised from this render's props and refreshed every render
+		 * by the layout effect underneath — never listed in the mount
+		 * effect's deps, so updating a callback does NOT tear the player
+		 * down.
+		 */
+		const callbacksRef = useRef<
+			Pick<
+				WaveformPlayerProps,
+				| 'onLoad'
+				| 'onPlay'
+				| 'onPause'
+				| 'onEnd'
+				| 'onTimeUpdate'
+				| 'onError'
+				| 'onNextTrack'
+				| 'onPreviousTrack'
+			>
+		>({
+			onLoad: props.onLoad,
+			onPlay: props.onPlay,
+			onPause: props.onPause,
+			onEnd: props.onEnd,
+			onTimeUpdate: props.onTimeUpdate,
+			onError: props.onError,
+			onNextTrack: props.onNextTrack,
+			onPreviousTrack: props.onPreviousTrack,
+		});
+
+		/* Refresh the ref on every render (before paint) so the stable
+		 * wrappers below always read the latest handlers. */
+		useLayoutEffect(() => {
+			callbacksRef.current = {
+				onLoad: props.onLoad,
+				onPlay: props.onPlay,
+				onPause: props.onPause,
+				onEnd: props.onEnd,
+				onTimeUpdate: props.onTimeUpdate,
+				onError: props.onError,
+				onNextTrack: props.onNextTrack,
+				onPreviousTrack: props.onPreviousTrack,
+			};
+		});
+
+		/**
+		 * Whether a track-navigation handler is supplied. Unlike the other
+		 * callbacks these can't be wired unconditionally: the core registers
+		 * the Media Session `nexttrack` / `previoustrack` action (the
+		 * lock-screen skip buttons) whenever the option is a function, so an
+		 * always-on wrapper would show buttons that do nothing. Presence is
+		 * therefore read at construction and is a remount dep; the handler's
+		 * *identity* still isn't, so fresh inline functions don't churn.
+		 */
+		const hasNextTrack = typeof props.onNextTrack === 'function';
+		const hasPreviousTrack = typeof props.onPreviousTrack === 'function';
+
+		/**
+		 * Mount / re-mount lifecycle.
+		 *
+		 * The dep array intentionally contains EVERY prop the library
+		 * uses at construction time. When any of them change, this
+		 * effect tears down the old instance and creates a new one
+		 * with the updated options. That's simpler and more correct
+		 * than trying to partial-update the live instance, and the
+		 * library has built-in caches (waveform peaks keyed by URL)
+		 * that make same-URL re-mounts cheap.
+		 */
+		useEffect(() => {
+			let cancelled = false;
+			let localInstance: { destroy?: () => void } | null = null;
+
+			/* The library is browser-only. Defer the import until we're
+			 * actually mounting client-side so SSR / RSC don't try to
+			 * evaluate the audio + canvas + fetch surface on the server.
+			 *
+			 * `/no-autoinit` rather than the package root: importing the root
+			 * scans the whole document for `[data-waveform-player]` markup and
+			 * builds a player for every match. This component constructs its
+			 * own player on its own ref and wants none of that — and as an
+			 * island on a page that *does* carry such markup (a CMS page, a
+			 * WordPress template), the root entry would silently mount players
+			 * the React tree never asked for. Same class, same options; the
+			 * only thing it drops is the scan. Needs core >= 1.27.0, which is
+			 * why the peer floor is hard rather than soft.
+			 */
+			void import('@arraypress/waveform-player/no-autoinit')
+				.then((mod) => {
+					if (cancelled) return;
+					const container = containerRef.current;
+					if (!container) return;
+
+					const WaveformPlayerClass = (mod.default ?? (mod as { WaveformPlayer?: unknown }).WaveformPlayer) as {
+						new (el: HTMLElement, opts: Record<string, unknown>): { destroy?: () => void };
+					};
+
+					if (typeof WaveformPlayerClass !== 'function') {
+						console.error(
+							'[WaveformPlayerReact] Failed to resolve WaveformPlayer constructor from module.'
+						);
+						return;
+					}
+
+					const opts = buildLibraryOptions(props);
+
+					/* Stable callback wrappers. Created once per player
+					 * instance and never change identity, so the core holds a
+					 * fixed reference, yet each call reads the *current*
+					 * handler from `callbacksRef` — fixing the stale-closure
+					 * bug without re-mounting on callback changes. Signatures
+					 * mirror the core's option callbacks exactly. */
+					opts.onLoad = (instance: WaveformPlayerInstance) => callbacksRef.current.onLoad?.(instance);
+					opts.onPlay = (instance: WaveformPlayerInstance) => callbacksRef.current.onPlay?.(instance);
+					opts.onPause = (instance: WaveformPlayerInstance) => callbacksRef.current.onPause?.(instance);
+					opts.onEnd = (instance: WaveformPlayerInstance) => callbacksRef.current.onEnd?.(instance);
+					opts.onTimeUpdate = (currentTime: number, duration: number, instance: WaveformPlayerInstance) =>
+						callbacksRef.current.onTimeUpdate?.(currentTime, duration, instance);
+					opts.onError = (error: Error, instance: WaveformPlayerInstance) =>
+						callbacksRef.current.onError?.(error, instance);
+					if (hasNextTrack) {
+						opts.onNextTrack = (instance: WaveformPlayerInstance) =>
+							callbacksRef.current.onNextTrack?.(instance);
+					}
+					if (hasPreviousTrack) {
+						opts.onPreviousTrack = (instance: WaveformPlayerInstance) =>
+							callbacksRef.current.onPreviousTrack?.(instance);
+					}
+
+					localInstance = new WaveformPlayerClass(container, opts);
+					instanceRef.current = localInstance;
+					/* createDOM() just replaced the host's class list with the
+					 * core's own; put `wfp-host` + `className` back beside it. */
+					applyHostClasses();
+				})
+				.catch((err) => {
+					console.error('[WaveformPlayerReact] Failed to load library:', err);
+				});
+
+			return () => {
+				cancelled = true;
+				const current = localInstance ?? (instanceRef.current as { destroy?: () => void } | null);
+				if (current && typeof current.destroy === 'function') {
+					try {
+						current.destroy();
+					} catch (err) {
+						console.warn('[WaveformPlayerReact] destroy() threw:', err);
+					}
+				}
+				instanceRef.current = null;
+			};
+			/* Re-mount on any prop change. Listed exhaustively rather
+			 * than spread to make the intent explicit and to keep the
+			 * lint rule happy. Callbacks intentionally NOT in deps:
+			 * a parent re-rendering with a fresh inline function
+			 * shouldn't tear the player down — only the *presence* of the
+			 * track-navigation handlers is (see `hasNextTrack`).
+			 * test/forwarding-drift.test.tsx fails if a forwarded option
+			 * is missing here. */
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, [
+			props.url,
+			props.src,
+			props.audioMode,
+			props.preload,
+			props.crossOrigin,
+			props.waveformStyle,
+			props.height,
+			props.samples,
+			props.barWidth,
+			props.barSpacing,
+			props.barRadius,
+			props.waveformGradient,
+			props.waveform,
+			props.colorPreset,
+			props.waveformColor,
+			props.progressColor,
+			props.playbackRate,
+			props.showPlaybackSpeed,
+			props.playbackRates,
+			props.showControls,
+			props.showInfo,
+			props.showTime,
+			props.showHoverTime,
+			props.seekHandle,
+			props.showBPM,
+			props.bpm,
+			props.buttonAlign,
+			props.layout,
+			props.buttonStyle,
+			props.buttonSize,
+			props.buttonRadius,
+			props.accessibleSeek,
+			props.seekLabel,
+			props.seekValueText,
+			props.playPauseLabel,
+			props.speedLabel,
+			props.errorText,
+			props.markers,
+			props.showMarkers,
+			props.title,
+			props.artist,
+			props.artwork,
+			props.artworkAlt,
+			props.artworkPosition,
+			props.album,
+			props.unknownTrackText,
+			props.autoplay,
+			props.singlePlay,
+			props.playOnSeek,
+			props.enableMediaSession,
+			props.playIcon,
+			props.pauseIcon,
+			hasNextTrack,
+			hasPreviousTrack,
+		]);
+
+		/**
+		 * Expose an imperative handle on the forwarded ref. Each
+		 * method is a thin pass-through to the live instance — if the
+		 * instance hasn't mounted yet (still loading async), calls are
+		 * no-ops (`pause`, `seekTo`, etc. return `undefined`).
+		 */
+		useImperativeHandle(
+			ref,
+			() => ({
+				play() {
+					const inst = instanceRef.current as { play?: () => Promise<void> | undefined } | null;
+					return inst?.play?.();
+				},
+				pause() {
+					const inst = instanceRef.current as { pause?: () => void } | null;
+					inst?.pause?.();
+				},
+				togglePlay() {
+					const inst = instanceRef.current as { togglePlay?: () => void } | null;
+					inst?.togglePlay?.();
+				},
+				seekTo(seconds) {
+					const inst = instanceRef.current as { seekTo?: (s: number) => void } | null;
+					inst?.seekTo?.(seconds);
+				},
+				seekToPercent(percent) {
+					const inst = instanceRef.current as { seekToPercent?: (p: number) => void } | null;
+					inst?.seekToPercent?.(percent);
+				},
+				setVolume(volume) {
+					const inst = instanceRef.current as { setVolume?: (v: number) => void } | null;
+					inst?.setVolume?.(volume);
+				},
+				setPlaybackRate(rate) {
+					const inst = instanceRef.current as { setPlaybackRate?: (r: number) => void } | null;
+					inst?.setPlaybackRate?.(rate);
+				},
+				setPlayingState(playing) {
+					const inst = instanceRef.current as { setPlayingState?: (p: boolean) => void } | null;
+					inst?.setPlayingState?.(playing);
+				},
+				setProgress(currentTime, duration) {
+					const inst = instanceRef.current as {
+						setProgress?: (c: number, d: number) => void;
+					} | null;
+					inst?.setProgress?.(currentTime, duration);
+				},
+				async loadTrack(url, title, artist, options) {
+					const inst = instanceRef.current as {
+						loadTrack?: (
+							u: string,
+							t?: string,
+							s?: string,
+							o?: Record<string, unknown>
+						) => Promise<void>;
+					} | null;
+					if (!inst?.loadTrack) return;
+					await inst.loadTrack(url, title, artist, options);
+				},
+				get instance() {
+					return instanceRef.current as WaveformPlayerInstance;
+				},
+			}),
+			[]
+		);
+
+		return (
+			<div
+				ref={containerRef}
+				id={props.id}
+				/* Frozen at first render — see "Host `class` handling". */
+				className={renderedClass}
+				style={props.style}
+			/>
+		);
+	}
+);

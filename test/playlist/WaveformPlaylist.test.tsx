@@ -1,0 +1,654 @@
+/**
+ * test/WaveformPlaylist.test.tsx
+ * ------------------------------
+ *
+ * Tests for the React wrapper. The core
+ * `@arraypress/waveform-playlist` library is mocked at the module
+ * boundary because its constructor builds a `WaveformPlayer` that
+ * reaches for browser APIs (Web Audio, Canvas, Fetch) jsdom does not
+ * implement. With the module mocked, tests verify the wrapper's
+ * responsibilities — track-markup rendering, mount / unmount
+ * lifecycle, option pass-through, ref forwarding, and re-mount on
+ * identity-prop change — without a real audio runtime.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, cleanup, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
+import { WaveformPlaylist } from '../src/WaveformPlaylist';
+import type {
+	WaveformPlaylistHandle,
+	WaveformPlaylistTrackInput,
+} from '../src/types';
+
+/**
+ * Stub instance the mocked constructor returns. Each method records its
+ * calls so tests can assert behaviour.
+ */
+const makeStub = () => {
+	const stub = {
+		destroy: vi.fn(),
+		selectTrack: vi.fn(),
+		seekToChapter: vi.fn(),
+		nextTrack: vi.fn(),
+		previousTrack: vi.fn(),
+		getPlayer: vi.fn(() => ({ id: 'player' })),
+		getCurrentTrackIndex: vi.fn(() => 2),
+		getTracks: vi.fn(() => [
+			{ index: 0, url: '/audio/a.mp3' },
+			{ index: 1, url: '/audio/b.mp3' },
+		]),
+	};
+	return stub;
+};
+
+/**
+ * Module-level mock. Every test sees the same `WaveformPlaylistCtor`
+ * spy so we can introspect what was constructed. The constructor records
+ * the host element it was given and the options object, then returns the
+ * latest `stub` so destroy() / nextTrack() etc. are observable.
+ */
+const ctorCalls: Array<{
+	el: HTMLElement;
+	opts: Record<string, unknown>;
+	stub: ReturnType<typeof makeStub>;
+	/** `data-url` of each `[data-track]` the instance parsed at construction. */
+	parsedUrls: string[];
+}> = [];
+
+/** Construct / destroy events in order, to assert destroy → construct. */
+const lifecycle: string[] = [];
+
+vi.mock('@arraypress/waveform-playlist', () => {
+	const WaveformPlaylistCtor = vi.fn(function (this: unknown, el: HTMLElement, opts: Record<string, unknown>) {
+		const stub = makeStub();
+		const n = ctorCalls.length;
+
+		/* Model the library's DOM contract (playlist 1.8.0): parse the
+		 * [data-track] children, hide them, and append generated UI; destroy()
+		 * removes only what it generated and un-hides the tracks in place. */
+		const trackEls = Array.from(el.querySelectorAll<HTMLElement>('[data-track]'));
+		trackEls.forEach((t) => (t.style.display = 'none'));
+		const ui = document.createElement('div');
+		ui.className = 'wp-generated';
+		el.appendChild(ui);
+		/* Layout classes on the host itself (addOwnClass): recorded, skipped
+		 * when the author already set them, removed again by destroy(). */
+		const ownClasses = ['waveform-playlist', ...(opts.layout === 'hero' ? ['wp-hero-layout'] : [])].filter(
+			(c) => !el.classList.contains(c)
+		);
+		el.classList.add(...ownClasses);
+		stub.destroy.mockImplementation(() => {
+			lifecycle.push(`destroy:${n}`);
+			ui.remove();
+			el.classList.remove(...ownClasses);
+			trackEls.forEach((t) => (t.style.display = ''));
+		});
+
+		lifecycle.push(`construct:${n}`);
+		ctorCalls.push({ el, opts, stub, parsedUrls: trackEls.map((t) => t.dataset.url ?? '') });
+		// Mutate `this` so the `new` call sees the stub's methods.
+		Object.assign(this as object, stub);
+	}) as unknown as new (el: HTMLElement, opts: Record<string, unknown>) => unknown;
+
+	return {
+		default: WaveformPlaylistCtor,
+		WaveformPlaylist: WaveformPlaylistCtor,
+	};
+});
+
+beforeEach(() => {
+	cleanup();
+	ctorCalls.length = 0;
+	lifecycle.length = 0;
+});
+
+/** A couple of representative tracks reused across tests. */
+const TWO_TRACKS: WaveformPlaylistTrackInput[] = [
+	{ url: '/audio/a.mp3', title: 'Track A', artist: 'Artist A' },
+	{ url: '/audio/b.mp3', title: 'Track B', artist: 'Artist B' },
+];
+
+/**
+ * Wait for the component's dynamic `import('@arraypress/waveform-playlist')`
+ * to resolve and the constructor mock to fire. The whole chain (effect
+ * run → import → .then callback) is microtask-scheduled, so we poll with
+ * testing-library's `waitFor`.
+ */
+async function waitForMount(expectedCount = 1): Promise<void> {
+	await waitFor(() => expect(ctorCalls.length).toBeGreaterThanOrEqual(expectedCount));
+}
+
+// ─── Mount + host container ──────────────────────────────────────────────
+
+describe('<WaveformPlaylist> — mount', () => {
+	it('renders a host div with the wfp-host class', () => {
+		const { container } = render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		const host = container.querySelector('div');
+		expect(host).not.toBeNull();
+		expect(host!.className).toContain('wfp-host');
+	});
+
+	it('forwards className and id to the host div', () => {
+		const { container } = render(
+			<WaveformPlaylist tracks={TWO_TRACKS} id="my-playlist" className="extra-class" />
+		);
+		const host = container.querySelector('div')!;
+		expect(host.id).toBe('my-playlist');
+		expect(host.className).toContain('wfp-host');
+		expect(host.className).toContain('extra-class');
+	});
+
+	it('forwards inline style to the host div', () => {
+		const { container } = render(
+			<WaveformPlaylist tracks={TWO_TRACKS} style={{ minHeight: 200 }} />
+		);
+		const host = container.querySelector('div')!;
+		expect(host.style.minHeight).toBe('200px');
+	});
+
+	it('does NOT put data-waveform-playlist on the host (avoids double auto-init)', () => {
+		const { container } = render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		const host = container.querySelector('.wfp-host')!;
+		expect(host.hasAttribute('data-waveform-playlist')).toBe(false);
+	});
+
+	it('constructs the library instance on mount with the host element + options', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} layout="minimal" continuous />);
+		await waitForMount();
+
+		expect(ctorCalls).toHaveLength(1);
+		const { el, opts } = ctorCalls[0];
+		expect(el).toBeInstanceOf(HTMLDivElement);
+		expect(el.classList.contains('wfp-host')).toBe(true);
+		expect(opts.layout).toBe('minimal');
+		expect(opts.continuous).toBe(true);
+		// Tracks come from the markup, NOT the options bag.
+		expect('tracks' in opts).toBe(false);
+	});
+});
+
+// ─── Track + chapter markup ──────────────────────────────────────────────
+
+describe('<WaveformPlaylist> — track markup', () => {
+	it('renders one [data-track] element per track with its data-* fields', () => {
+		const { container } = render(
+			<WaveformPlaylist
+				tracks={[
+					{
+						url: '/audio/a.mp3',
+						title: 'Track A',
+						artist: 'Artist A',
+						artwork: '/img/a.jpg',
+						album: 'Album A',
+						duration: '3:45',
+					},
+				]}
+			/>
+		);
+
+		const tracks = container.querySelectorAll('[data-track]');
+		expect(tracks).toHaveLength(1);
+		const el = tracks[0] as HTMLElement;
+		expect(el.dataset.url).toBe('/audio/a.mp3');
+		expect(el.dataset.title).toBe('Track A');
+		expect(el.dataset.artist).toBe('Artist A');
+		expect(el.dataset.artwork).toBe('/img/a.jpg');
+		expect(el.dataset.album).toBe('Album A');
+		expect(el.dataset.duration).toBe('3:45');
+	});
+
+	it('omits data-* attributes for omitted track fields', () => {
+		const { container } = render(
+			<WaveformPlaylist tracks={[{ url: '/audio/a.mp3' }]} />
+		);
+		const el = container.querySelector('[data-track]') as HTMLElement;
+		expect(el.dataset.url).toBe('/audio/a.mp3');
+		expect(el.hasAttribute('data-title')).toBe(false);
+		expect(el.hasAttribute('data-artwork')).toBe(false);
+		expect(el.hasAttribute('data-markers')).toBe(false);
+	});
+
+	it('JSON-encodes per-track markers into data-markers', () => {
+		const markers = [{ time: 0, label: 'Intro' }, { time: 30, label: 'Verse' }];
+		const { container } = render(
+			<WaveformPlaylist tracks={[{ url: '/audio/a.mp3', markers }]} />
+		);
+		const el = container.querySelector('[data-track]') as HTMLElement;
+		expect(el.dataset.markers).toBe(JSON.stringify(markers));
+	});
+
+	it('renders per-track waveform peaks as data-waveform (JSON array, or a URL verbatim)', () => {
+		const peaks = [0.1, 0.5, 0.9];
+		const { container } = render(
+			<WaveformPlaylist
+				tracks={[
+					{ url: '/audio/a.mp3', waveform: peaks },
+					{ url: '/audio/b.mp3', waveform: '/peaks/b.json' },
+					{ url: '/audio/c.mp3' },
+				]}
+			/>
+		);
+		const [a, b, c] = Array.from(container.querySelectorAll('[data-track]')) as HTMLElement[];
+		expect(a.dataset.waveform).toBe(JSON.stringify(peaks));
+		expect(b.dataset.waveform).toBe('/peaks/b.json');
+		expect(c.hasAttribute('data-waveform')).toBe(false);
+	});
+
+	it('renders [data-chapter] children with time, color, and label', () => {
+		const { container } = render(
+			<WaveformPlaylist
+				tracks={[
+					{
+						url: '/audio/a.mp3',
+						title: 'Episode',
+						chapters: [
+							{ time: 0, label: 'Intro' },
+							{ time: '5:30', label: 'Main topic', color: '#a855f7' },
+						],
+					},
+				]}
+			/>
+		);
+
+		const chapters = container.querySelectorAll('[data-chapter]');
+		expect(chapters).toHaveLength(2);
+
+		const first = chapters[0] as HTMLElement;
+		expect(first.dataset.time).toBe('0');
+		expect(first.textContent).toBe('Intro');
+		expect(first.hasAttribute('data-color')).toBe(false);
+
+		const second = chapters[1] as HTMLElement;
+		expect(second.dataset.time).toBe('5:30');
+		expect(second.dataset.color).toBe('#a855f7');
+		expect(second.textContent).toBe('Main topic');
+	});
+
+	it('renders a track with no chapters as an empty [data-track]', () => {
+		const { container } = render(
+			<WaveformPlaylist tracks={[{ url: '/audio/a.mp3', title: 'No chapters' }]} />
+		);
+		const el = container.querySelector('[data-track]') as HTMLElement;
+		expect(el.querySelectorAll('[data-chapter]')).toHaveLength(0);
+	});
+});
+
+// ─── Option pass-through ─────────────────────────────────────────────────
+
+describe('<WaveformPlaylist> — option pass-through', () => {
+	it('forwards playlist + player options into the options bag', async () => {
+		render(
+			<WaveformPlaylist
+				tracks={TWO_TRACKS}
+				layout="minimal"
+				continuous
+				expandChapters={false}
+				showDuration={false}
+				showChapterMarkers
+				chapterMarkerColor="#abc"
+				showPlayState={false}
+				waveformStyle="bars"
+				height={80}
+				barWidth={3}
+				colorPreset="dark"
+				progressColor="#def"
+				showPlaybackSpeed
+				showBPM
+			/>
+		);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		expect(opts.layout).toBe('minimal');
+		expect(opts.continuous).toBe(true);
+		expect(opts.expandChapters).toBe(false);
+		expect(opts.showDuration).toBe(false);
+		expect(opts.showChapterMarkers).toBe(true);
+		expect(opts.chapterMarkerColor).toBe('#abc');
+		expect(opts.showPlayState).toBe(false);
+		expect(opts.waveformStyle).toBe('bars');
+		expect(opts.height).toBe(80);
+		expect(opts.barWidth).toBe(3);
+		expect(opts.colorPreset).toBe('dark');
+		expect(opts.progressColor).toBe('#def');
+		expect(opts.showPlaybackSpeed).toBe(true);
+		expect(opts.showBPM).toBe(true);
+	});
+
+	it('forwards the audio-loading options (preload, crossOrigin)', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} preload="metadata" crossOrigin="anonymous" />);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		expect(opts.preload).toBe('metadata');
+		expect(opts.crossOrigin).toBe('anonymous');
+	});
+
+	it('does not pass options for props the consumer omitted', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		expect('layout' in opts).toBe(false);
+		expect('continuous' in opts).toBe(false);
+		expect('waveformStyle' in opts).toBe(false);
+		expect('height' in opts).toBe(false);
+		expect('showBPM' in opts).toBe(false);
+		expect('crossOrigin' in opts).toBe(false);
+	});
+
+	it('forwards the hero / grid layouts and their options', async () => {
+		render(
+			<WaveformPlaylist
+				tracks={TWO_TRACKS}
+				layout="grid"
+				showArtist={false}
+				coverSize={120}
+				thumbnailSize={64}
+				density="compact"
+				coverPosition="top"
+				barPosition="top"
+			/>
+		);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		expect(opts.layout).toBe('grid');
+		expect(opts.showArtist).toBe(false);
+		expect(opts.coverSize).toBe(120);
+		expect(opts.thumbnailSize).toBe(64);
+		expect(opts.density).toBe('compact');
+		expect(opts.coverPosition).toBe('top');
+		expect(opts.barPosition).toBe('top');
+	});
+
+	it('forwards waveformGradient, seekHandle, buttonSize, buttonRadius, artworkPosition', async () => {
+		render(
+			<WaveformPlaylist
+				tracks={TWO_TRACKS}
+				waveformGradient="diagonal"
+				seekHandle
+				buttonSize="4rem"
+				buttonRadius={0}
+				artworkPosition="button"
+			/>
+		);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		expect(opts.waveformGradient).toBe('diagonal');
+		expect(opts.seekHandle).toBe(true);
+		expect(opts.buttonSize).toBe('4rem');
+		// 0 is a real value (a square button), not "unset".
+		expect(opts.buttonRadius).toBe(0);
+		expect(opts.artworkPosition).toBe('button');
+	});
+
+	it('accepts layout="hero"', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" />);
+		await waitForMount();
+		expect(ctorCalls[0].opts.layout).toBe('hero');
+	});
+
+	it('does not forward audioMode (the playlist always owns its audio)', async () => {
+		// An `'external'` player inside a playlist dispatches request-play
+		// events nobody answers; playlist 1.8.0 ignores the option, and the
+		// wrapper no longer accepts or forwards it.
+		render(
+			<WaveformPlaylist
+				tracks={TWO_TRACKS}
+				// @ts-expect-error — audioMode is not a playlist prop
+				audioMode="external"
+			/>
+		);
+		await waitForMount();
+		expect('audioMode' in ctorCalls[0].opts).toBe(false);
+	});
+
+	it('forwards arrays as-is (playbackRates)', async () => {
+		const rates = [0.5, 1, 2];
+		render(<WaveformPlaylist tracks={TWO_TRACKS} playbackRates={rates} />);
+		await waitForMount();
+		expect(ctorCalls[0].opts.playbackRates).toEqual(rates);
+	});
+});
+
+// ─── Player callbacks ────────────────────────────────────────────────────
+
+describe('<WaveformPlaylist> — player callbacks', () => {
+	/* The playlist (1.8.0+) chains these after its own handling, so each
+	 * reaches the embedded player's same-named callback. */
+	const CALLBACKS = [
+		'onLoad',
+		'onPlay',
+		'onPause',
+		'onEnd',
+		'onTimeUpdate',
+		'onError',
+		'onNextTrack',
+		'onPreviousTrack',
+	] as const;
+
+	it('forwards every player callback prop to the playlist, with the core arguments', async () => {
+		const handlers = Object.fromEntries(CALLBACKS.map((name) => [name, vi.fn()]));
+		render(<WaveformPlaylist tracks={TWO_TRACKS} {...handlers} />);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+
+		for (const name of CALLBACKS) {
+			expect(typeof opts[name], name).toBe('function');
+			(opts[name] as (...a: unknown[]) => void)('a', 'b', 'c');
+			expect(handlers[name], name).toHaveBeenCalledWith('a', 'b', 'c');
+		}
+	});
+
+	it('reaches the latest handler without re-mounting when a callback changes', async () => {
+		const first = vi.fn();
+		const second = vi.fn();
+		const { rerender } = render(<WaveformPlaylist tracks={TWO_TRACKS} onPlay={first} />);
+		await waitForMount();
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} onPlay={second} />);
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		expect(ctorCalls).toHaveLength(1);
+
+		(ctorCalls[0].opts.onPlay as (p: unknown) => void)('player');
+		expect(first).not.toHaveBeenCalled();
+		expect(second).toHaveBeenCalledWith('player');
+	});
+
+	it('is a no-op when no handler is supplied', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+		expect(() => (ctorCalls[0].opts.onEnd as (p: unknown) => void)?.('player')).not.toThrow();
+	});
+});
+
+// ─── Lifecycle: unmount + re-mount on identity change ────────────────────
+
+describe('<WaveformPlaylist> — lifecycle', () => {
+	it('calls destroy() on unmount', async () => {
+		const { unmount } = render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+		const { stub } = ctorCalls[0];
+
+		unmount();
+		expect(stub.destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it('re-mounts when the tracks array changes (destroys old, constructs new)', async () => {
+		const { rerender } = render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+		expect(ctorCalls).toHaveLength(1);
+
+		rerender(
+			<WaveformPlaylist
+				tracks={[
+					{ url: '/audio/c.mp3', title: 'Track C' },
+					{ url: '/audio/d.mp3', title: 'Track D' },
+					{ url: '/audio/e.mp3', title: 'Track E' },
+				]}
+			/>
+		);
+		await waitForMount(2);
+
+		expect(ctorCalls).toHaveLength(2);
+		// First instance got destroyed during the re-mount.
+		expect(ctorCalls[0].stub.destroy).toHaveBeenCalled();
+	});
+
+	it('re-mounting on a prop change hands the new instance the rendered tracks', async () => {
+		// The library's destroy() used to wipe the host, taking the
+		// wrapper-rendered [data-track] children with it, so the rebuilt
+		// playlist was empty. Playlist 1.8.0 leaves them in place.
+		const { rerender, container } = render(<WaveformPlaylist tracks={TWO_TRACKS} height={60} />);
+		await waitForMount();
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} height={90} />);
+		await waitForMount(2);
+
+		expect(lifecycle).toEqual(['construct:0', 'destroy:0', 'construct:1']);
+		expect(ctorCalls[1].opts.height).toBe(90);
+		expect(ctorCalls[1].parsedUrls).toEqual(['/audio/a.mp3', '/audio/b.mp3']);
+
+		const host = container.querySelector('.wfp-host')!;
+		expect(host.querySelectorAll('[data-track]')).toHaveLength(2);
+		// Only the live instance's UI remains.
+		expect(host.querySelectorAll('.wp-generated')).toHaveLength(1);
+	});
+
+	it('re-mounting on a tracks change hands the new instance the new tracks', async () => {
+		const { rerender, container } = render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+
+		rerender(
+			<WaveformPlaylist
+				tracks={[...TWO_TRACKS, { url: '/audio/c.mp3', title: 'Track C' }]}
+			/>
+		);
+		await waitForMount(2);
+
+		expect(lifecycle).toEqual(['construct:0', 'destroy:0', 'construct:1']);
+		expect(ctorCalls[1].parsedUrls).toEqual(['/audio/a.mp3', '/audio/b.mp3', '/audio/c.mp3']);
+		expect(container.querySelectorAll('.wfp-host [data-track]')).toHaveLength(3);
+	});
+
+	it('re-mounts when layout changes', async () => {
+		const { rerender } = render(<WaveformPlaylist tracks={TWO_TRACKS} layout="list" />);
+		await waitForMount();
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} layout="minimal" />);
+		await waitForMount(2);
+
+		expect(ctorCalls).toHaveLength(2);
+		expect(ctorCalls[1].opts.layout).toBe('minimal');
+	});
+
+	it('does NOT re-mount when only className changes', async () => {
+		const { rerender } = render(<WaveformPlaylist tracks={TWO_TRACKS} className="a" />);
+		await waitForMount();
+		expect(ctorCalls).toHaveLength(1);
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} className="b" />);
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		expect(ctorCalls).toHaveLength(1);
+	});
+
+	it('keeps the playlist\'s host classes when only className changes', async () => {
+		/* No remount happens (above), so nothing would put the layout classes
+		 * back if React rewrote the `class` attribute — the playlist would
+		 * lose its layout/styling until some other prop changed. */
+		const { container, rerender } = render(
+			<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" className="first" />
+		);
+		await waitForMount();
+		const host = container.querySelector('div')!;
+		expect(host.classList.contains('wp-hero-layout')).toBe(true);
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" className="second" />);
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+		expect(ctorCalls).toHaveLength(1);
+		expect(host.className.split(' ').sort()).toEqual(
+			['second', 'waveform-playlist', 'wfp-host', 'wp-hero-layout'].sort()
+		);
+
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" />);
+		expect(host.className.split(' ').sort()).toEqual(
+			['waveform-playlist', 'wfp-host', 'wp-hero-layout'].sort()
+		);
+	});
+
+	it('a remount after a className change still carries the current className', async () => {
+		const { container, rerender } = render(
+			<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" className="first" />
+		);
+		await waitForMount();
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} layout="hero" className="second" />);
+		rerender(<WaveformPlaylist tracks={TWO_TRACKS} layout="list" className="second" />);
+		await waitForMount(2);
+
+		const host = container.querySelector('div')!;
+		expect(ctorCalls[1].el).toBe(host);
+		expect(host.className.split(' ').sort()).toEqual(['second', 'waveform-playlist', 'wfp-host'].sort());
+	});
+});
+
+// ─── forwardRef + imperative handle ──────────────────────────────────────
+
+describe('<WaveformPlaylist> — imperative ref', () => {
+	it('exposes selectTrack / nextTrack / previousTrack / seekToChapter', async () => {
+		const ref = createRef<WaveformPlaylistHandle>();
+		render(<WaveformPlaylist ref={ref} tracks={TWO_TRACKS} />);
+		await waitForMount();
+		const { stub } = ctorCalls[0];
+
+		ref.current?.selectTrack(1);
+		ref.current?.nextTrack();
+		ref.current?.previousTrack();
+		ref.current?.seekToChapter(0, 90);
+
+		expect(stub.selectTrack).toHaveBeenCalledWith(1);
+		expect(stub.nextTrack).toHaveBeenCalledTimes(1);
+		expect(stub.previousTrack).toHaveBeenCalledTimes(1);
+		expect(stub.seekToChapter).toHaveBeenCalledWith(0, 90);
+	});
+
+	it('forwards getPlayer / getCurrentTrackIndex / getTracks return values', async () => {
+		const ref = createRef<WaveformPlaylistHandle>();
+		render(<WaveformPlaylist ref={ref} tracks={TWO_TRACKS} />);
+		await waitForMount();
+		const { stub } = ctorCalls[0];
+
+		expect(ref.current?.getPlayer()).toEqual({ id: 'player' });
+		expect(ref.current?.getCurrentTrackIndex()).toBe(2);
+		expect(ref.current?.getTracks()).toHaveLength(2);
+		expect(stub.getPlayer).toHaveBeenCalled();
+		expect(stub.getCurrentTrackIndex).toHaveBeenCalled();
+		expect(stub.getTracks).toHaveBeenCalled();
+	});
+
+	it('exposes the raw instance on ref.current.instance', async () => {
+		const ref = createRef<WaveformPlaylistHandle>();
+		render(<WaveformPlaylist ref={ref} tracks={TWO_TRACKS} />);
+		await waitForMount();
+
+		expect(ref.current?.instance).toBeTruthy();
+		// The instance carries the playlist's methods.
+		expect(typeof (ref.current?.instance as { nextTrack?: unknown }).nextTrack).toBe('function');
+	});
+
+	it('handle methods are safe no-ops before the instance mounts', () => {
+		const ref = createRef<WaveformPlaylistHandle>();
+		render(<WaveformPlaylist ref={ref} tracks={TWO_TRACKS} />);
+
+		// Synchronously after render the async import hasn't resolved yet, so
+		// the instance is null — calls must not throw and getters return
+		// sensible fallbacks.
+		expect(() => ref.current?.nextTrack()).not.toThrow();
+		expect(ref.current?.getCurrentTrackIndex()).toBe(0);
+		expect(ref.current?.getTracks()).toEqual([]);
+		expect(ref.current?.getPlayer()).toBeNull();
+		expect(ref.current?.instance).toBeNull();
+	});
+});
