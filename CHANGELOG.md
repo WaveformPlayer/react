@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0-next.0
+## 2.0.0 — Unreleased
 
 The four React wrappers in one package, one sub-path per component:
 
