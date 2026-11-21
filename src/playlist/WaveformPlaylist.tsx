@@ -148,10 +148,11 @@ function buildPlaylistOptions(props: WaveformPlaylistProps): Record<string, unkn
 
 	/* Pass-through player options — forwarded to the embedded player the
 	 * playlist drives. Per-track content (url/title/artist/artwork/album/
-	 * markers/waveform) is NOT here; it comes from the rendered markup.
-	 * `audioMode` is deliberately absent: the playlist always owns its
-	 * audio (1.8.0 ignores the option), and an `'external'` embedded player
-	 * would dispatch request-play events nobody answers. */
+	 * markers/waveform, and the 2.0 duration/downloadUrl/downloadName) is
+	 * NOT here; it comes from the rendered markup. Never forwarded, because
+	 * the playlist core drops them anyway: `audioMode` (the playlist always
+	 * owns its audio), `loop` / `showLoop` (a looping track never ends, which
+	 * stalls `continuous`), and `lazy` (the playlist loads its own player). */
 	if (props.preload !== undefined) opts.preload = props.preload;
 	if (props.crossOrigin !== undefined) opts.crossOrigin = props.crossOrigin;
 
@@ -209,6 +210,16 @@ function buildPlaylistOptions(props: WaveformPlaylistProps): Record<string, unkn
 	if (props.singlePlay !== undefined) opts.singlePlay = props.singlePlay;
 	if (props.playOnSeek !== undefined) opts.playOnSeek = props.playOnSeek;
 	if (props.enableMediaSession !== undefined) opts.enableMediaSession = props.enableMediaSession;
+
+	/* Volume and download controls (2.0) — the playlist passes these to its
+	 * player. The download link's target and file name are per-track
+	 * (`downloadUrl` / `downloadName` on each track). */
+	if (props.showVolume !== undefined) opts.showVolume = props.showVolume;
+	if (props.volume !== undefined) opts.volume = props.volume;
+	if (props.showDownload !== undefined) opts.showDownload = props.showDownload;
+	if (props.volumeLabel !== undefined) opts.volumeLabel = props.volumeLabel;
+	if (props.muteLabel !== undefined) opts.muteLabel = props.muteLabel;
+	if (props.downloadLabel !== undefined) opts.downloadLabel = props.downloadLabel;
 
 	/* Icons */
 	if (props.playIcon !== undefined) opts.playIcon = props.playIcon;
@@ -450,6 +461,12 @@ export const WaveformPlaylist = forwardRef<WaveformPlaylistHandle, WaveformPlayl
 			props.singlePlay,
 			props.playOnSeek,
 			props.enableMediaSession,
+			props.showVolume,
+			props.volume,
+			props.showDownload,
+			props.volumeLabel,
+			props.muteLabel,
+			props.downloadLabel,
 			props.playIcon,
 			props.pauseIcon,
 		]);

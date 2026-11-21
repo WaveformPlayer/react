@@ -81,6 +81,10 @@ function buildLibraryOptions(props: WaveformPlayerProps): Record<string, unknown
 	if (props.audioMode !== undefined) opts.audioMode = props.audioMode;
 	if (props.preload !== undefined) opts.preload = props.preload;
 	if (props.crossOrigin !== undefined) opts.crossOrigin = props.crossOrigin;
+	if (props.lazy !== undefined) opts.lazy = props.lazy;
+	/* The track's known length. Per-track, like url: the component remounts
+	 * when url changes, so it always arrives with its own track. */
+	if (props.duration !== undefined) opts.duration = props.duration;
 
 	/* Waveform visualisation */
 	if (props.waveformStyle !== undefined) opts.waveformStyle = props.waveformStyle;
@@ -146,6 +150,20 @@ function buildLibraryOptions(props: WaveformPlayerProps): Record<string, unknown
 	if (props.singlePlay !== undefined) opts.singlePlay = props.singlePlay;
 	if (props.playOnSeek !== undefined) opts.playOnSeek = props.playOnSeek;
 	if (props.enableMediaSession !== undefined) opts.enableMediaSession = props.enableMediaSession;
+	if (props.loop !== undefined) opts.loop = props.loop;
+
+	/* Loop, volume and download controls (2.0) */
+	if (props.showLoop !== undefined) opts.showLoop = props.showLoop;
+	if (props.showVolume !== undefined) opts.showVolume = props.showVolume;
+	if (props.volume !== undefined) opts.volume = props.volume;
+	if (props.showDownload !== undefined) opts.showDownload = props.showDownload;
+	/* Per-track, like duration: they follow url through the remount. */
+	if (props.downloadUrl !== undefined) opts.downloadUrl = props.downloadUrl;
+	if (props.downloadName !== undefined) opts.downloadName = props.downloadName;
+	if (props.loopLabel !== undefined) opts.loopLabel = props.loopLabel;
+	if (props.volumeLabel !== undefined) opts.volumeLabel = props.volumeLabel;
+	if (props.muteLabel !== undefined) opts.muteLabel = props.muteLabel;
+	if (props.downloadLabel !== undefined) opts.downloadLabel = props.downloadLabel;
 
 	/* Icons */
 	if (props.playIcon !== undefined) opts.playIcon = props.playIcon;
@@ -337,8 +355,8 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 			 * island on a page that *does* carry such markup (a CMS page, a
 			 * WordPress template), the root entry would silently mount players
 			 * the React tree never asked for. Same class, same options; the
-			 * only thing it drops is the scan. Needs core >= 1.27.0, which is
-			 * why the peer floor is hard rather than soft.
+			 * only thing it drops is the scan (and, in 2.0, registering the
+			 * `<waveform-player>` element).
 			 */
 			void import('@arraypress/waveform-player/no-autoinit')
 				.then((mod) => {
@@ -419,6 +437,8 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 			props.audioMode,
 			props.preload,
 			props.crossOrigin,
+			props.lazy,
+			props.duration,
 			props.waveformStyle,
 			props.height,
 			props.samples,
@@ -464,6 +484,17 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 			props.singlePlay,
 			props.playOnSeek,
 			props.enableMediaSession,
+			props.loop,
+			props.showLoop,
+			props.showVolume,
+			props.volume,
+			props.showDownload,
+			props.downloadUrl,
+			props.downloadName,
+			props.loopLabel,
+			props.volumeLabel,
+			props.muteLabel,
+			props.downloadLabel,
 			props.playIcon,
 			props.pauseIcon,
 			hasNextTrack,

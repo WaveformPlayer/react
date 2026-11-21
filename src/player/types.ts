@@ -26,6 +26,7 @@
 import type {
 	WaveformPlayer,
 	WaveformPlayerOptions,
+	WaveformPeaks,
 } from '@arraypress/waveform-player';
 
 /**
@@ -39,6 +40,7 @@ export type {
 	ColorPreset,
 	AudioMode,
 	AudioPreload,
+	AudioCrossOrigin,
 	ButtonAlign,
 	WaveformMarker,
 	WaveformPeaks,
@@ -135,6 +137,17 @@ export interface WaveformPlayerProps
 	 * an accepted alias — provide one of `url` or `src`.
 	 */
 	url?: string;
+
+	/**
+	 * Pre-computed peaks, so the player skips decoding the audio: an array
+	 * of 0..1 values, compact `wp1:` peaks (`"wp1:"` + base64url, one byte
+	 * per peak — about a quarter the size of a JSON array; what
+	 * `@arraypress/waveform-gen` writes and the core's
+	 * `WaveformPlayer.utils.encodeCompactPeaks()` makes), a `.json` peaks
+	 * URL, or a JSON array string. A malformed `wp1:` string counts as no
+	 * peaks, never an error. Per-track: it follows `url`.
+	 */
+	waveform?: WaveformPeaks;
 
 	// ── React-specific callbacks ───────────────────────────────────────
 

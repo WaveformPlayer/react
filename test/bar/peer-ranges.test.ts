@@ -4,23 +4,20 @@
  *
  * The peer floors must cover everything the wrapper types and relies on:
  *
- *   - `@arraypress/waveform-bar` ≥ 1.11.0 — the newest *required* config
- *     key in `WaveformBarConfig`, `crossOrigin`, arrived in bar 1.11.0.
- *     (`barRadius` and a working `showTime: false` need bar 1.12.0, but
- *     they're optional and older bars simply ignore them, so they're
- *     documented on the type instead of raising the floor.)
- *   - `@arraypress/waveform-player` ≥ 1.8.0 — the bar drives
- *     `audioMode: 'external'` players, which crashed before core 1.8.0.
+ *   - `@arraypress/waveform-bar` ≥ 2.0.0 — the bar the 2.0 player is built
+ *     for: it passes a track's `duration` and `wp1:` peaks to the player,
+ *     and 1.x bars require a 1.x player.
+ *   - `@arraypress/waveform-player` ≥ 2.0.0 — the bar's own peer floor.
  *
- * Dev dependencies are held to the same floors so the tests run against
- * a supported version. Kept identical across the four bar wrappers.
+ * The dev dependencies are the sibling 2.0 checkouts (`file:../waveform-*`)
+ * until 2.0 is on npm, so the tests run against exactly that code.
  */
 import { describe, expect, it } from 'vitest';
 import pkg from '../../package.json';
 
 const MIN_FLOORS: Record<string, string> = {
-	'@arraypress/waveform-bar': '1.11.0',
-	'@arraypress/waveform-player': '1.8.0',
+	'@arraypress/waveform-bar': '2.0.0',
+	'@arraypress/waveform-player': '2.0.0',
 };
 
 /** Lower bound of a `^x.y.z` range as a comparable tuple. */
@@ -39,23 +36,17 @@ function atLeast(range: string, min: string): boolean {
 	return true;
 }
 
-const deps: Record<string, Record<string, string> | undefined> = {
-	peerDependencies: pkg.peerDependencies,
-	devDependencies: pkg.devDependencies,
-};
-
 describe('package.json — peer floors cover what the wrapper relies on', () => {
 	for (const [name, min] of Object.entries(MIN_FLOORS)) {
 		it(`peerDependencies["${name}"] is at least ^${min}`, () => {
-			const range = deps.peerDependencies?.[name];
+			const range = (pkg.peerDependencies as Record<string, string>)[name];
 			expect(range, `${name} must be a peer`).toBeDefined();
-			expect(atLeast(range!, min), `${name}@${range} < ${min}`).toBe(true);
+			expect(atLeast(range, min), `${name}@${range} < ${min}`).toBe(true);
 		});
 
-		it(`devDependencies["${name}"] (if present) is at least ^${min}`, () => {
-			const range = deps.devDependencies?.[name];
-			if (range === undefined) return;
-			expect(atLeast(range, min), `${name}@${range} < ${min}`).toBe(true);
+		it(`devDependencies["${name}"] is the sibling 2.0 checkout`, () => {
+			const dir = name.replace('@arraypress/', '');
+			expect((pkg.devDependencies as Record<string, string>)[name]).toBe(`file:../${dir}`);
 		});
 	}
 });

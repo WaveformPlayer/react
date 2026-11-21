@@ -3,7 +3,7 @@
  * ----------------------
  *
  * The option surface this wrapper has to cover, read from the sounds
- * core's hand-written `index.d.ts` as installed in `node_modules`: every
+ * core's generated `types/types.d.ts` as installed in `node_modules`: every
  * key of `WaveformSoundsOptions`.
  *
  * The forwarding-drift test checks each key is either forwarded at runtime
@@ -12,8 +12,10 @@
  * silently dropped.
  */
 // The installed core's declaration file, as text. A relative path (not the
-// package specifier) because the core doesn't export `./index.d.ts`.
-import soundsDts from '../../node_modules/@arraypress/waveform-sounds/index.d.ts?raw';
+// package specifier) because the core's `exports` map doesn't expose
+// `./types/*`. 2.0 generates its declarations; the root `index.d.ts` the
+// 0.x wrappers read is gone, and the option types live in `types/types.d.ts`.
+import soundsDts from '../../node_modules/@arraypress/waveform-sounds/types/types.d.ts?raw';
 
 /**
  * The property names declared directly on `export interface <name>` —

@@ -213,6 +213,76 @@ describe('<WaveformPlayer> — waveform gradient + seek handle', () => {
 	});
 });
 
+describe('<WaveformPlayer> — 2.0 options', () => {
+	/** Each new 2.0 option with a sample value that isn't its core default. */
+	const OPTIONS = {
+		duration: 187,
+		lazy: true,
+		loop: true,
+		showLoop: true,
+		loopLabel: 'Wiederholen',
+		showVolume: true,
+		volume: 0.4,
+		volumeLabel: 'Lautstärke',
+		muteLabel: 'Stumm',
+		showDownload: true,
+		downloadUrl: '/dl/a.wav',
+		downloadName: 'A (master).wav',
+		downloadLabel: 'Herunterladen',
+	} as const;
+
+	it.each(Object.entries(OPTIONS))('forwards %s when set', async (key, value) => {
+		render(<WaveformPlayer url="/audio/a.mp3" {...{ [key]: value }} />);
+		await waitForMount();
+		expect(ctorCalls[0].opts[key]).toBe(value);
+	});
+
+	it.each(Object.keys(OPTIONS))('omits %s when unset, so the core default applies', async (key) => {
+		render(<WaveformPlayer url="/audio/a.mp3" />);
+		await waitForMount();
+		expect(key in ctorCalls[0].opts).toBe(false);
+	});
+
+	it('forwards falsy values that mean something: volume 0, loop false, duration null', async () => {
+		render(<WaveformPlayer url="/audio/a.mp3" volume={0} loop={false} duration={null} />);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+		expect(opts.volume).toBe(0);
+		expect(opts.loop).toBe(false);
+		expect(opts.duration).toBeNull();
+	});
+
+	it('forwards compact wp1: peaks verbatim, for the core to decode', async () => {
+		render(<WaveformPlayer url="/audio/a.mp3" waveform="wp1:AID_" />);
+		await waitForMount();
+		expect(ctorCalls[0].opts.waveform).toBe('wp1:AID_');
+	});
+
+	it('per-track values follow the url: a new track brings its own duration and download target', async () => {
+		const { rerender } = render(
+			<WaveformPlayer url="/audio/a.mp3" duration={187} downloadUrl="/dl/a.wav" downloadName="a.wav" showDownload />
+		);
+		await waitForMount();
+
+		rerender(
+			<WaveformPlayer url="/audio/b.mp3" duration={225} downloadUrl="/dl/b.wav" downloadName="b.wav" showDownload />
+		);
+		await waitForMount(2);
+		expect(ctorCalls[0].stub.destroy).toHaveBeenCalled();
+		expect(ctorCalls[1].opts).toMatchObject({
+			url: '/audio/b.mp3',
+			duration: 225,
+			downloadUrl: '/dl/b.wav',
+			downloadName: 'b.wav',
+		});
+
+		// A track without them doesn't inherit the previous track's.
+		rerender(<WaveformPlayer url="/audio/c.mp3" showDownload />);
+		await waitForMount(3);
+		for (const key of ['duration', 'downloadUrl', 'downloadName']) expect(key in ctorCalls[2].opts, key).toBe(false);
+	});
+});
+
 describe('<WaveformPlayer> — Media Session track navigation', () => {
 	it('forwards onNextTrack / onPreviousTrack as wrappers that reach the current handler', async () => {
 		const onNextTrack = vi.fn();

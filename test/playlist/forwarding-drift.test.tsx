@@ -37,10 +37,18 @@ const NOT_FORWARDED: Record<string, string> = {
 	album: 'per-track: data-album',
 	markers: 'per-track: data-markers',
 	waveform: 'per-track: data-waveform',
+	duration: 'per-track: data-duration (playlist 2.0 passes it to the player as seconds)',
+	downloadUrl: 'per-track: data-download-url',
+	downloadName: 'per-track: data-download-name',
 	// Aliases / collisions.
 	style: 'alias of waveformStyle; `style` is the host div\'s inline CSS here',
-	// Owned by the playlist.
-	audioMode: 'the playlist always owns its audio (1.8.0 ignores the option)',
+	// Dropped by the playlist core (its own NOT_FORWARDED), so a prop would
+	// typecheck and do nothing.
+	audioMode: 'the playlist always owns its audio',
+	loop: 'a looping track never fires ended, which stalls continuous',
+	showLoop: "its button turns that same loop on; the playlist strips it",
+	lazy: 'the playlist loads its own player; playlist 2.0 strips it',
+	loopLabel: 'names the loop toggle, which showLoop being stripped means never renders',
 };
 
 const FORWARDED = ALL_OPTIONS.filter((key) => !(key in NOT_FORWARDED));

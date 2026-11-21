@@ -2,15 +2,15 @@
  * test/peer-ranges.test.ts
  * ------------------------
  *
- * The peer floors are load-bearing, not cosmetic. `@arraypress/waveform-sounds`
- * 0.1.0 is the first release (with the `/render` and `/no-autoinit`
- * subpaths this wrapper imports), and the sounds core itself peers on
- * `@arraypress/waveform-player@^1.24.5` for its engine.
+ * The peer floors are load-bearing, not cosmetic. The drift test reads the
+ * option types from `types/types.d.ts`, which `@arraypress/waveform-sounds`
+ * only ships from 2.0.0 (its `/render` and `/no-autoinit` entries date from
+ * 0.1.0), and sounds 2.0 itself peers on `@arraypress/waveform-player@^2.0.0`
+ * for its engine.
  */
 import { describe, it, expect } from 'vitest';
 import pkg from '../../package.json';
 
-/** The lowest version a `^x.y.z` range admits, as comparable numbers. */
 /** The lowest version a range accepts: `^x.y.z`, or a `||` union of them. */
 const floor = (range: string): number[] => {
 	const parts = range.split('||').map((part) => {
@@ -27,11 +27,16 @@ const atLeast = (range: string, min: string): boolean => {
 };
 
 describe('peer dependency floors', () => {
-	it('requires waveform-sounds >= 0.1.0 (the /render and /no-autoinit entries)', () => {
-		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-sounds'], '0.1.0')).toBe(true);
+	it('requires waveform-sounds >= 2.0.0 (the 2.0 player engine and generated types)', () => {
+		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-sounds'], '2.0.0')).toBe(true);
 	});
 
-	it('requires waveform-player >= 1.24.5 (the sounds core\'s own floor)', () => {
-		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-player'], '1.24.5')).toBe(true);
+	it("requires waveform-player >= 2.0.0 (the sounds core's own floor)", () => {
+		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-player'], '2.0.0')).toBe(true);
+	});
+
+	it('tests against the sibling 2.0 checkouts', () => {
+		expect(pkg.devDependencies['@arraypress/waveform-sounds']).toBe('file:../waveform-sounds');
+		expect(pkg.devDependencies['@arraypress/waveform-player']).toBe('file:../waveform-player');
 	});
 });
