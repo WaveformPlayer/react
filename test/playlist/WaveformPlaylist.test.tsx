@@ -63,7 +63,7 @@ vi.mock('@arraypress/waveform-playlist', () => {
 		const stub = makeStub();
 		const n = ctorCalls.length;
 
-		/* Model the library's DOM contract (playlist 1.8.0): parse the
+		/* Model the library's DOM contract (playlist 1.8.0+): parse the
 		 * [data-track] children, hide them, and append generated UI; destroy()
 		 * removes only what it generated and un-hides the tracks in place. */
 		const trackEls = Array.from(el.querySelectorAll<HTMLElement>('[data-track]'));
@@ -208,6 +208,37 @@ describe('<WaveformPlaylist> — track markup', () => {
 		expect(el.hasAttribute('data-markers')).toBe(false);
 	});
 
+	it('renders a seconds duration and the per-track download target (2.0)', () => {
+		const { container } = render(
+			<WaveformPlaylist
+				tracks={[
+					{ url: '/audio/a.mp3', duration: 225, downloadUrl: '/dl/a.wav', downloadName: 'A (master).wav' },
+					{ url: '/audio/b.mp3', duration: '1:02:03' },
+					{ url: '/audio/c.mp3', duration: 0 },
+				]}
+			/>
+		);
+		const [a, b, c] = Array.from(container.querySelectorAll('[data-track]')) as HTMLElement[];
+		expect(a.getAttribute('data-duration')).toBe('225');
+		expect(a.getAttribute('data-download-url')).toBe('/dl/a.wav');
+		expect(a.getAttribute('data-download-name')).toBe('A (master).wav');
+		expect(b.getAttribute('data-duration')).toBe('1:02:03');
+		expect(b.hasAttribute('data-download-url')).toBe(false);
+		expect(b.hasAttribute('data-download-name')).toBe(false);
+		// 0 is rendered, not dropped: the playlist core decides it's unusable.
+		expect(c.getAttribute('data-duration')).toBe('0');
+	});
+
+	it('re-mounts with the new markup when a track\'s download target changes', async () => {
+		const { rerender, container } = render(
+			<WaveformPlaylist tracks={[{ url: '/audio/a.mp3', downloadUrl: '/dl/a1.wav' }]} />
+		);
+		await waitForMount();
+		rerender(<WaveformPlaylist tracks={[{ url: '/audio/a.mp3', downloadUrl: '/dl/a2.wav' }]} />);
+		await waitForMount(2);
+		expect(container.querySelector('[data-track]')!.getAttribute('data-download-url')).toBe('/dl/a2.wav');
+	});
+
 	it('JSON-encodes per-track markers into data-markers', () => {
 		const markers = [{ time: 0, label: 'Intro' }, { time: 30, label: 'Verse' }];
 		const { container } = render(
@@ -232,6 +263,11 @@ describe('<WaveformPlaylist> — track markup', () => {
 		expect(a.dataset.waveform).toBe(JSON.stringify(peaks));
 		expect(b.dataset.waveform).toBe('/peaks/b.json');
 		expect(c.hasAttribute('data-waveform')).toBe(false);
+	});
+
+	it('passes compact wp1: peaks through verbatim', () => {
+		const { container } = render(<WaveformPlaylist tracks={[{ url: '/audio/a.mp3', waveform: 'wp1:AID_' }]} />);
+		expect((container.querySelector('[data-track]') as HTMLElement).dataset.waveform).toBe('wp1:AID_');
 	});
 
 	it('renders [data-chapter] children with time, color, and label', () => {
@@ -392,8 +428,8 @@ describe('<WaveformPlaylist> — option pass-through', () => {
 
 	it('does not forward audioMode (the playlist always owns its audio)', async () => {
 		// An `'external'` player inside a playlist dispatches request-play
-		// events nobody answers; playlist 1.8.0 ignores the option, and the
-		// wrapper no longer accepts or forwards it.
+		// events nobody answers; the playlist core strips the option, and the
+		// wrapper neither accepts nor forwards it.
 		render(
 			<WaveformPlaylist
 				tracks={TWO_TRACKS}
@@ -403,6 +439,53 @@ describe('<WaveformPlaylist> — option pass-through', () => {
 		);
 		await waitForMount();
 		expect('audioMode' in ctorCalls[0].opts).toBe(false);
+	});
+
+	it('forwards the 2.0 volume and download options the playlist passes to its player', async () => {
+		render(
+			<WaveformPlaylist
+				tracks={TWO_TRACKS}
+				showVolume
+				volume={0}
+				showDownload
+				volumeLabel="Lautstärke"
+				muteLabel="Stumm"
+				downloadLabel="Herunterladen"
+			/>
+		);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+		expect(opts.showVolume).toBe(true);
+		// 0 is a real volume, not "unset".
+		expect(opts.volume).toBe(0);
+		expect(opts.showDownload).toBe(true);
+		expect(opts.volumeLabel).toBe('Lautstärke');
+		expect(opts.muteLabel).toBe('Stumm');
+		expect(opts.downloadLabel).toBe('Herunterladen');
+	});
+
+	it('omits the 2.0 options when unset, so the core defaults apply', async () => {
+		render(<WaveformPlaylist tracks={TWO_TRACKS} />);
+		await waitForMount();
+		const { opts } = ctorCalls[0];
+		for (const key of ['showVolume', 'volume', 'showDownload', 'volumeLabel', 'muteLabel', 'downloadLabel']) {
+			expect(key in opts, key).toBe(false);
+		}
+	});
+
+	it('does not forward the options the playlist core drops, or the per-track ones', async () => {
+		const dropped = {
+			loop: true,
+			showLoop: true,
+			loopLabel: 'Loop',
+			lazy: true,
+			duration: 187,
+			downloadUrl: '/x.wav',
+			downloadName: 'x.wav',
+		};
+		render(<WaveformPlaylist tracks={TWO_TRACKS} {...(dropped as object)} />);
+		await waitForMount();
+		for (const key of Object.keys(dropped)) expect(key in ctorCalls[0].opts, key).toBe(false);
 	});
 
 	it('forwards arrays as-is (playbackRates)', async () => {
@@ -416,8 +499,8 @@ describe('<WaveformPlaylist> — option pass-through', () => {
 // ─── Player callbacks ────────────────────────────────────────────────────
 
 describe('<WaveformPlaylist> — player callbacks', () => {
-	/* The playlist (1.8.0+) chains these after its own handling, so each
-	 * reaches the embedded player's same-named callback. */
+	/* The playlist chains these after its own handling, so each reaches the
+	 * embedded player's same-named callback. */
 	const CALLBACKS = [
 		'onLoad',
 		'onPlay',

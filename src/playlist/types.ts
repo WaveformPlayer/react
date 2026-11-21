@@ -14,8 +14,8 @@
  *     options ({@link WaveformPlayerOptions}) the playlist forwards to the
  *     embedded player (e.g. `height`, `waveformStyle`, `colorPreset`).
  *
- * Both cores ship hand-authored `index.d.ts` files, so this wrapper can
- * never drift out of sync with them.
+ * Both cores generate their declarations from their TypeScript source,
+ * so these types can never drift out of sync with them.
  *
  * This module only adds the React-specific surface:
  *
@@ -100,8 +100,26 @@ export interface WaveformPlaylistTrackInput {
 	artwork?: string;
 	/** Album name, forwarded to the Media Session API (`data-album`). */
 	album?: string;
-	/** Human-readable display duration, e.g. `'3:45'` (`data-duration`). */
-	duration?: string;
+	/**
+	 * The track's length (`data-duration`): a clock string (`'3:45'`,
+	 * `'1:02:03'`) or a number of seconds (`225`, or `'225'`). The list shows
+	 * it (seconds formatted as `3:45`), and the playlist passes it to the
+	 * player as its `duration`, so the time readout, markers and seeks have a
+	 * length before the audio's metadata loads — with `preload: 'none'`, not
+	 * until playback starts.
+	 */
+	duration?: number | string;
+	/**
+	 * Where this track's download link points (`data-download-url`), e.g. a
+	 * full-quality file when the playlist streams a preview. Shown with the
+	 * playlist's `showDownload`; defaults to the track's `url`.
+	 */
+	downloadUrl?: string;
+	/**
+	 * File name suggested for this track's download (`data-download-name`).
+	 * Defaults to the file name in the url.
+	 */
+	downloadName?: string;
 	/**
 	 * Explicit waveform markers (separate from chapters). JSON-encoded into
 	 * `data-markers`, which the playlist parses for this track.
@@ -109,8 +127,11 @@ export interface WaveformPlaylistTrackInput {
 	markers?: WaveformPlaylistMarker[];
 	/**
 	 * Pre-computed peaks, so the player skips decoding this track's audio.
-	 * An array is JSON-encoded into `data-waveform`; a string (e.g. a
-	 * `.json` peaks URL) is passed through for the player to resolve.
+	 * An array is JSON-encoded into `data-waveform`; a string — a `.json`
+	 * peaks URL, or compact `wp1:` peaks (`"wp1:"` + base64url, one byte per
+	 * peak, as `@arraypress/waveform-gen` writes and the player's
+	 * `utils.encodeCompactPeaks()` makes) — is passed through for the player
+	 * to resolve.
 	 */
 	waveform?: number[] | string;
 	/** Chapters rendered as `[data-chapter]` children of this track. */
@@ -157,53 +178,15 @@ export interface WaveformPlaylistHandle {
 }
 
 /**
- * A playlist option's type, read from the installed playlist core.
- *
- * `@arraypress/waveform-playlist` before 1.8.0 declared only seven of its
- * options; the hero / grid ones below reached its `[option: string]: unknown`
- * index signature, which would type these props as `unknown`. For such a key
- * the `Fallback` — copied from 1.8.0's `index.d.ts` — is used instead. With
- * the peer range (`^1.8.0`) installed every key is declared, so this is
- * exactly the core's own type and the fallback is inert.
- */
-type PlaylistOption<K extends string, Fallback> =
-	unknown extends WaveformPlaylistOptions[K] ? Fallback : WaveformPlaylistOptions[K];
-
-/**
  * The playlist's layout options — `layout` and the hero / grid / density
- * options that ship with it. Typed from the playlist core (see
- * {@link PlaylistOption}); `layout` overrides the player's own `layout`.
+ * options that ship with it — typed from the playlist core. `layout`
+ * overrides the player's own `layout`.
  */
-export interface WaveformPlaylistLayoutProps {
-	/**
-	 * Playlist layout. `'list'` shows the full track list; `'minimal'` a
-	 * compact button switcher; `'hero'` a now-playing unit (cover +
-	 * waveform) over a track queue; `'grid'` a cover-art grid with a
-	 * now-playing bar. (The union is written out so `'hero'` / `'grid'`
-	 * typecheck against a pre-1.8.0 core; with 1.8.0 it equals the core's.)
-	 * @default 'list'
-	 */
-	layout?: WaveformPlaylistOptions['layout'] | 'hero' | 'grid';
-	/**
-	 * Show the now-playing / per-row artist. Turn off for single-artist
-	 * albums where it would only repeat.
-	 * @default true
-	 */
-	showArtist?: PlaylistOption<'showArtist', boolean>;
-	/**
-	 * Hero cover size in px. Defaults to the waveform height plus the time
-	 * row, so the cover sits flush with the waveform column.
-	 */
-	coverSize?: PlaylistOption<'coverSize', number>;
-	/** Hero queue thumbnail / grid cover size in px. Defaults to the CSS value. */
-	thumbnailSize?: PlaylistOption<'thumbnailSize', number>;
-	/** Row density for every layout. @default 'comfortable' */
-	density?: PlaylistOption<'density', 'comfortable' | 'compact'>;
-	/** Hero / grid cover position relative to the waveform. @default 'left' */
-	coverPosition?: PlaylistOption<'coverPosition', 'left' | 'top'>;
-	/** Grid layout: now-playing bar above or below the covers. @default 'bottom' */
-	barPosition?: PlaylistOption<'barPosition', 'top' | 'bottom'>;
-}
+export interface WaveformPlaylistLayoutProps
+	extends Pick<
+		WaveformPlaylistOptions,
+		'layout' | 'showArtist' | 'coverSize' | 'thumbnailSize' | 'density' | 'coverPosition' | 'barPosition'
+	> {}
 
 /**
  * Props accepted by `<WaveformPlaylist>`.
@@ -218,14 +201,18 @@ export interface WaveformPlaylistLayoutProps {
  *      `showArtist`, `coverSize`, `thumbnailSize`, `density`,
  *      `coverPosition`, `barPosition`).
  *   2. **Pass-through player options** — every visualisation / colour /
- *      behaviour option from the core `WaveformPlayerOptions`, minus the
- *      per-track content fields (`url`, `title`, `artist`, `artwork`,
- *      `album`, `markers`, `waveform`) which come from `tracks`, the
- *      `style`/`src` aliases, the player's `layout` (overridden above),
- *      and `audioMode` (the playlist always owns its audio). The player
- *      callbacks (`onLoad`, `onPlay`, `onPause`, `onEnd`, `onTimeUpdate`,
- *      `onError`, `onNextTrack`, `onPreviousTrack`) are included: the
- *      playlist runs each after its own handling (playlist 1.8.0+). A new
+ *      behaviour option from the core `WaveformPlayerOptions` (including
+ *      the 2.0 `showVolume`, `volume`, `showDownload` and their labels),
+ *      minus the per-track fields (`url`, `title`, `artist`, `artwork`,
+ *      `album`, `markers`, `waveform`, `duration`, `downloadUrl`,
+ *      `downloadName`) which come from `tracks`, the `style`/`src` aliases,
+ *      the player's `layout` (overridden above), and the options the
+ *      playlist never passes to its player: `audioMode` (it always owns its
+ *      audio), `loop` and `showLoop` (a looping track never ends, which
+ *      stalls `continuous`; `loopLabel` names that hidden toggle) and
+ *      `lazy`. The player callbacks (`onLoad`, `onPlay`, `onPause`, `onEnd`,
+ *      `onTimeUpdate`, `onError`, `onNextTrack`, `onPreviousTrack`) are
+ *      included: the playlist runs each after its own handling. A new
  *      handler never re-mounts the playlist.
  *   3. **React extras** — the required `tracks` array plus the DOM
  *      pass-throughs `id`, `className`, and `style`.
@@ -256,7 +243,14 @@ export interface WaveformPlaylistProps
 			| 'album'
 			| 'markers'
 			| 'waveform'
+			| 'duration'
+			| 'downloadUrl'
+			| 'downloadName'
 			| 'audioMode'
+			| 'loop'
+			| 'showLoop'
+			| 'loopLabel'
+			| 'lazy'
 		> {
 	// ── Tracks (required) ──────────────────────────────────────────────
 

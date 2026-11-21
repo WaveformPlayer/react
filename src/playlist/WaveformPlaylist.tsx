@@ -32,7 +32,7 @@
  *
  * `onLoad`, `onPlay`, `onPause`, `onEnd`, `onTimeUpdate`, `onError`,
  * `onNextTrack` and `onPreviousTrack` reach the embedded player: the
- * playlist (1.8.0+) runs each after its own handling. They are handed over
+ * playlist runs each after its own handling. They are handed over
  * as stable trampolines reading the latest prop, so they are NOT re-mount
  * inputs.
  *
@@ -101,9 +101,9 @@ import type {
 } from './types';
 
 /**
- * The core player callbacks the playlist runs after its own handling
- * (playlist 1.8.0+). Forwarded as stable trampolines that read the latest
- * prop at call time, so a new handler never re-mounts the playlist.
+ * The core player callbacks the playlist runs after its own handling.
+ * Forwarded as stable trampolines that read the latest prop at call time,
+ * so a new handler never re-mounts the playlist.
  */
 const CALLBACK_PROPS = [
 	'onLoad',
@@ -535,7 +535,9 @@ export const WaveformPlaylist = forwardRef<WaveformPlaylistHandle, WaveformPlayl
 						data-artist={track.artist}
 						data-artwork={track.artwork}
 						data-album={track.album}
-						data-duration={track.duration}
+						data-duration={track.duration === undefined ? undefined : String(track.duration)}
+						data-download-url={track.downloadUrl}
+						data-download-name={track.downloadName}
 						data-markers={track.markers ? JSON.stringify(track.markers) : undefined}
 						data-waveform={
 							Array.isArray(track.waveform) ? JSON.stringify(track.waveform) : track.waveform
