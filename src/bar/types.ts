@@ -113,7 +113,7 @@ export interface WaveformBarConfig {
 	showRepeat?: boolean;
 	showVolume?: boolean;
 	showMute?: boolean;
-	/** Show the current / total time readout. `false` hides it (waveform-bar 1.12.0+; older bars ignored this and always showed it). @default true */
+	/** Show the current / total time readout. `false` hides it. @default true */
 	showTime?: boolean;
 	showTrackLink?: boolean;
 	showMeta?: boolean;
@@ -137,7 +137,7 @@ export interface WaveformBarConfig {
 	waveformHeight?: number;
 	barWidth?: number;
 	barSpacing?: number;
-	/** Rounded bar-cap radius in px (`0` = square). `null` = the player's default. Requires waveform-bar 1.12.0+ (older bars ignore it). @default null */
+	/** Rounded bar-cap radius in px (`0` = square). `null` = the player's default. @default null */
 	barRadius?: number | null;
 	/** Unplayed waveform colour — a CSS colour, or an array of colour stops for a gradient (e.g. `['#fafafa', '#71717a']`). `null` = theme default. */
 	waveformColor?: string | string[] | null;
@@ -222,10 +222,24 @@ export interface WaveformBarTrackData {
 	album?: string;
 	artwork?: string;
 	link?: string;
+	/**
+	 * The track's length (`data-wb-duration`): a number of seconds (`187`)
+	 * or a clock string (`'3:07'`, `'1:02:03'`). The bar shows it as soon as
+	 * the track loads (seconds formatted as a clock) and passes it to the
+	 * player as its `duration`, so the length and seeks work before the
+	 * audio's metadata arrives. Anything else is shown as written and not
+	 * passed on.
+	 */
 	duration?: string | number;
 	bpm?: string | number;
 	musicalKey?: string;
 	meta?: string[];
+	/**
+	 * Pre-computed peaks (`data-wb-waveform`), so the player skips decoding:
+	 * an array of 0..1 values (JSON-encoded), compact `wp1:` peaks (`"wp1:"`
+	 * + base64url, one byte per peak, as `@arraypress/waveform-gen` writes),
+	 * or a `.json` peaks URL. Strings pass through for the player to decode.
+	 */
 	waveform?: number[] | string;
 	markers?: WaveformBarMarker[];
 	favorited?: boolean;

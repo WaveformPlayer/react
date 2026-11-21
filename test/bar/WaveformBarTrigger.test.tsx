@@ -163,6 +163,16 @@ describe('<WaveformBarTrigger> — array props', () => {
 		expect(container.querySelector('button')!.getAttribute('data-wb-waveform')).toBe('/peaks/track.json');
 	});
 
+	it('passes compact wp1: peaks through verbatim (bar 2.0 hands them to the player)', () => {
+		const { container } = render(<WaveformBarTrigger url="/a.mp3" waveform="wp1:AID_" />);
+		expect(container.querySelector('button')!.getAttribute('data-wb-waveform')).toBe('wp1:AID_');
+	});
+
+	it('emits a clock-string duration verbatim (seconds or clock string both reach the player)', () => {
+		const { container } = render(<WaveformBarTrigger url="/a.mp3" duration="1:02:03" />);
+		expect(container.querySelector('button')!.getAttribute('data-wb-duration')).toBe('1:02:03');
+	});
+
 	it('JSON-stringifies markers', () => {
 		const markers = [
 			{ time: 0, label: 'Intro' },
