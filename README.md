@@ -4,13 +4,16 @@ React components for the WaveformPlayer family: the player, the persistent bar,
 the playlist and the sound list. Each component has its own sub-path, and you
 install only the cores you use.
 
+Requires React 19.3+ and the 2.0 cores. ES modules only (Node 22.12+ can
+`require()` it).
+
 **[Documentation](https://docs.waveformplayer.com/frameworks/react/)**
 
 ## Sub-paths
 
 | Import | Components | Cores to install |
 | --- | --- | --- |
-| `@arraypress/waveform-react/player` | `WaveformPlayer` | `@arraypress/waveform-player` (1.27.0+) |
+| `@arraypress/waveform-react/player` | `WaveformPlayer` | `@arraypress/waveform-player` |
 | `@arraypress/waveform-react/bar` | `WaveformBar`, `WaveformBarTrigger` | `@arraypress/waveform-bar`, `@arraypress/waveform-player` |
 | `@arraypress/waveform-react/playlist` | `WaveformPlaylist` | `@arraypress/waveform-playlist`, `@arraypress/waveform-player` |
 | `@arraypress/waveform-react/sounds` | `WaveformSounds` | `@arraypress/waveform-sounds`, `@arraypress/waveform-player` |
@@ -20,9 +23,10 @@ There is no root import. Each component loads its core with a dynamic
 combined entry would fail to build unless every core were installed. The cores
 are optional peer dependencies for the same reason.
 
-Each sub-path exports exactly what the old single-component package exported
-(`@arraypress/waveform-player-react` and the others): same names, props, refs
-and types. Moving over means changing the import path.
+Every core is 2.0 or later. Each sub-path exports what the old
+single-component package exported (`@arraypress/waveform-player-react` and the
+others): same names, props, refs and types, plus the 2.0 additions in the
+CHANGELOG. Moving over means changing the import path.
 
 ## Player
 
@@ -35,6 +39,21 @@ import '@arraypress/waveform-player/dist/waveform-player.css';
 import { WaveformPlayer } from '@arraypress/waveform-react/player';
 
 <WaveformPlayer url="/track.mp3" title="My Song" artist="The Artist" waveformStyle="mirror" />
+```
+
+A known `duration` and `wp1:` peaks let the player show the whole track, its
+length and its waveform with `preload="none"`, before any audio is fetched:
+
+```tsx
+<WaveformPlayer
+  url="/track.mp3"
+  preload="none"
+  duration={187}
+  waveform="wp1:…"
+  showVolume
+  showDownload
+  onSeek={(d) => console.log('seeked to', d.currentTime)}
+/>
 ```
 
 ## Bar
