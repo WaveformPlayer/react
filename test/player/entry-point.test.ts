@@ -25,3 +25,11 @@ describe('core entry point', () => {
 		expect(pkg.peerDependenciesMeta['@arraypress/waveform-player']).toEqual({ optional: true });
 	});
 });
+
+describe('react peer', () => {
+	it('supports React 19.3+ only (ref is a plain prop; no forwardRef)', () => {
+		expect(pkg.peerDependencies.react).toBe('^19.3.0');
+		expect(pkg.devDependencies.react).toMatch(/^\^19\.3\./);
+		expect(pkg.devDependencies['react-dom']).toMatch(/^\^19\.3\./);
+	});
+});

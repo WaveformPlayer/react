@@ -701,6 +701,13 @@ describe('<WaveformPlayer> — className changes keep the core\'s host classes',
 
 // ─── forwardRef + imperative handle ──────────────────────────────────────
 
+describe('<WaveformPlayer> — React 19 component', () => {
+	it('is a plain function component named WaveformPlayer (what DevTools shows)', () => {
+		expect(typeof WaveformPlayer).toBe('function');
+		expect(WaveformPlayer.name).toBe('WaveformPlayer');
+	});
+});
+
 describe('<WaveformPlayer> — imperative ref', () => {
 	it('exposes play / pause / togglePlay / seekTo on the ref', async () => {
 		const ref = createRef<WaveformPlayerHandle>();

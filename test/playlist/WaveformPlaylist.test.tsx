@@ -679,6 +679,13 @@ describe('<WaveformPlaylist> — lifecycle', () => {
 
 // ─── forwardRef + imperative handle ──────────────────────────────────────
 
+describe('<WaveformPlaylist> — React 19 component', () => {
+	it('is a plain function component named WaveformPlaylist (what DevTools shows)', () => {
+		expect(typeof WaveformPlaylist).toBe('function');
+		expect(WaveformPlaylist.name).toBe('WaveformPlaylist');
+	});
+});
+
 describe('<WaveformPlaylist> — imperative ref', () => {
 	it('exposes selectTrack / nextTrack / previousTrack / seekToChapter', async () => {
 		const ref = createRef<WaveformPlaylistHandle>();

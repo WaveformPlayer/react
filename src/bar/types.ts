@@ -257,8 +257,8 @@ export interface WaveformBarTrackData {
  * prop a `<button>` accepts — `onClick`, `data-*` (e.g. `data-testid`),
  * `role`, `tabIndex`, `disabled`, event handlers, etc. — passes
  * straight through to the rendered element (the component spreads the
- * leftover `...rest` onto it). The component is also `forwardRef`-wrapped,
- * so `ref` reaches the underlying element. The track-data props above
+ * leftover `...rest` onto it). The component also takes a `ref` (a plain
+ * prop since React 19), which reaches the underlying element. The track-data props above
  * still win where names overlap (the component applies its own
  * `data-wb-*` contract last).
  *

@@ -36,7 +36,6 @@
  *
  * @module WaveformBarTrigger
  */
-import { forwardRef } from 'react';
 import type { CSSProperties, HTMLAttributes, ReactNode, Ref } from 'react';
 import type { WaveformBarTriggerProps } from './types';
 
@@ -116,8 +115,7 @@ function toAttr(value: unknown): string | undefined {
  *     Play mix
  *   </WaveformBarTrigger>
  */
-export const WaveformBarTrigger = forwardRef<HTMLElement, WaveformBarTriggerProps>(
-	function WaveformBarTrigger(props, ref) {
+export function WaveformBarTrigger({ ref, ...props }: WaveformBarTriggerProps & { ref?: Ref<HTMLElement> }) {
 	const {
 		mode = 'play',
 		as = 'button',
@@ -248,6 +246,3 @@ export const WaveformBarTrigger = forwardRef<HTMLElement, WaveformBarTriggerProp
 		</button>
 	);
 }
-);
-
-WaveformBarTrigger.displayName = 'WaveformBarTrigger';

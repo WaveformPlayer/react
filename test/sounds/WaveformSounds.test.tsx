@@ -522,3 +522,10 @@ describe('<WaveformSounds> — ref handle', () => {
 		expect(handle.instance).toBeNull();
 	});
 });
+
+describe('<WaveformSounds> — React 19 component', () => {
+	it('is a plain function component named WaveformSounds (what DevTools shows)', () => {
+		expect(typeof WaveformSounds).toBe('function');
+		expect(WaveformSounds.name).toBe('WaveformSounds');
+	});
+});

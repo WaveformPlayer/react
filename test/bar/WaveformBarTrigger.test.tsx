@@ -360,3 +360,10 @@ describe('<WaveformBarTrigger> — kitchen sink', () => {
 		expect(btn.getAttribute('aria-label')).toBe('Preview Trap Beat');
 	});
 });
+
+describe('<WaveformBarTrigger> — React 19 component', () => {
+	it('is a plain function component named WaveformBarTrigger (what DevTools shows)', () => {
+		expect(typeof WaveformBarTrigger).toBe('function');
+		expect(WaveformBarTrigger.name).toBe('WaveformBarTrigger');
+	});
+});

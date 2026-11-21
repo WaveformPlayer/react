@@ -83,13 +83,12 @@
  * @module WaveformPlaylist
  */
 import {
-	forwardRef,
 	useEffect,
 	useImperativeHandle,
 	useLayoutEffect,
 	useRef,
 	useState,
-	type ForwardedRef,
+	type Ref,
 } from 'react';
 // Aliased to avoid colliding with this file's own `WaveformPlaylist`
 // component export. This is the core library's playlist class type.
@@ -277,285 +276,286 @@ function syncHostClasses(el: HTMLElement, applied: readonly string[], wanted: re
  *   <WaveformPlaylist ref={ref} tracks={tracks} continuous />
  *   <button onClick={() => ref.current?.nextTrack()}>Next</button>
  */
-export const WaveformPlaylist = forwardRef<WaveformPlaylistHandle, WaveformPlaylistProps>(
-	function WaveformPlaylist(props, ref: ForwardedRef<WaveformPlaylistHandle>) {
-		const hostRef = useRef<HTMLDivElement | null>(null);
-		const instanceRef = useRef<unknown>(null);
+export function WaveformPlaylist({
+	ref,
+	...props
+}: WaveformPlaylistProps & { ref?: Ref<WaveformPlaylistHandle> }) {
+	const hostRef = useRef<HTMLDivElement | null>(null);
+	const instanceRef = useRef<unknown>(null);
 
-		/**
-		 * Host `class` handling.
-		 *
-		 * The playlist owns part of the host's class list — `waveform-playlist`,
-		 * `wp-hero-layout`, `wp-grid-layout`, `wp-density-compact`,
-		 * `wp-cover-top`, `wp-no-artist`, `wp-minimal` — added at construction
-		 * and removed by `destroy()`. If React owned the `class` attribute, a
-		 * `className`-only change — which rightly doesn't remount — would
-		 * rewrite it and strip those classes for good, breaking the layout.
-		 *
-		 * So React renders the class **once**: `renderedClass` is frozen at the
-		 * first render (server markup and hydration still carry the user's
-		 * classes), and because the value never changes React never writes the
-		 * attribute again. Later `className` changes are applied here with
-		 * `classList`, touching only the tokens this component put there.
-		 *
-		 * Chosen over mounting the playlist into an inner element (which would
-		 * leave React's element alone by construction) because that changes the
-		 * DOM users style: `.my-class.waveform-playlist` selectors stop matching,
-		 * and CSS variables set through `style` / `className` would land on a
-		 * parent, shadowed by the core's own `.waveform-playlist` defaults.
-		 */
-		const hostClass = ['wfp-host', props.className].filter(Boolean).join(' ');
-		const [renderedClass] = useState(hostClass);
-		const appliedClassesRef = useRef<string[]>(classTokens(renderedClass));
-		useLayoutEffect(() => {
-			const el = hostRef.current;
-			if (!el) return;
-			const wanted = classTokens(hostClass);
-			syncHostClasses(el, appliedClassesRef.current, wanted);
-			appliedClassesRef.current = wanted;
-		}, [hostClass]);
+	/**
+	 * Host `class` handling.
+	 *
+	 * The playlist owns part of the host's class list — `waveform-playlist`,
+	 * `wp-hero-layout`, `wp-grid-layout`, `wp-density-compact`,
+	 * `wp-cover-top`, `wp-no-artist`, `wp-minimal` — added at construction
+	 * and removed by `destroy()`. If React owned the `class` attribute, a
+	 * `className`-only change — which rightly doesn't remount — would
+	 * rewrite it and strip those classes for good, breaking the layout.
+	 *
+	 * So React renders the class **once**: `renderedClass` is frozen at the
+	 * first render (server markup and hydration still carry the user's
+	 * classes), and because the value never changes React never writes the
+	 * attribute again. Later `className` changes are applied here with
+	 * `classList`, touching only the tokens this component put there.
+	 *
+	 * Chosen over mounting the playlist into an inner element (which would
+	 * leave React's element alone by construction) because that changes the
+	 * DOM users style: `.my-class.waveform-playlist` selectors stop matching,
+	 * and CSS variables set through `style` / `className` would land on a
+	 * parent, shadowed by the core's own `.waveform-playlist` defaults.
+	 */
+	const hostClass = ['wfp-host', props.className].filter(Boolean).join(' ');
+	const [renderedClass] = useState(hostClass);
+	const appliedClassesRef = useRef<string[]>(classTokens(renderedClass));
+	useLayoutEffect(() => {
+		const el = hostRef.current;
+		if (!el) return;
+		const wanted = classTokens(hostClass);
+		syncHostClasses(el, appliedClassesRef.current, wanted);
+		appliedClassesRef.current = wanted;
+	}, [hostClass]);
 
-		/* Latest callback props. The trampolines handed to the playlist read
-		 * from here at call time, so swapping a handler takes effect without
-		 * a re-mount (callbacks are deliberately NOT in the effect deps).
-		 * Initialised from this render's props and refreshed before paint on
-		 * every render — the same pattern as waveform-player-react. */
-		const pickCallbacks = (): Callbacks =>
-			Object.fromEntries(CALLBACK_PROPS.map((name) => [name, props[name]])) as Callbacks;
-		const callbacksRef = useRef<Callbacks>(pickCallbacks());
-		useLayoutEffect(() => {
-			callbacksRef.current = pickCallbacks();
-		});
+	/* Latest callback props. The trampolines handed to the playlist read
+	 * from here at call time, so swapping a handler takes effect without
+	 * a re-mount (callbacks are deliberately NOT in the effect deps).
+	 * Initialised from this render's props and refreshed before paint on
+	 * every render — the same pattern as waveform-player-react. */
+	const pickCallbacks = (): Callbacks =>
+		Object.fromEntries(CALLBACK_PROPS.map((name) => [name, props[name]])) as Callbacks;
+	const callbacksRef = useRef<Callbacks>(pickCallbacks());
+	useLayoutEffect(() => {
+		callbacksRef.current = pickCallbacks();
+	});
 
-		const { tracks } = props;
+	const { tracks } = props;
 
-		/* Stable serialisation of the tracks used as an identity key in the
-		 * effect deps below — a changed track set tears down and rebuilds the
-		 * playlist so the constructor re-parses the (updated) child markup. */
-		const tracksKey = JSON.stringify(tracks);
+	/* Stable serialisation of the tracks used as an identity key in the
+	 * effect deps below — a changed track set tears down and rebuilds the
+	 * playlist so the constructor re-parses the (updated) child markup. */
+	const tracksKey = JSON.stringify(tracks);
 
-		/**
-		 * Mount / re-mount lifecycle.
-		 *
-		 * The dep array contains EVERY prop the library reads at construction
-		 * time (plus `tracksKey`). When any change, this effect tears the old
-		 * instance down and builds a new one against the freshly-rendered
-		 * markup. Simpler and more correct than partial-updating a live
-		 * playlist.
-		 */
-		useEffect(() => {
-			let cancelled = false;
-			let localInstance: { destroy?: () => void } | null = null;
+	/**
+	 * Mount / re-mount lifecycle.
+	 *
+	 * The dep array contains EVERY prop the library reads at construction
+	 * time (plus `tracksKey`). When any change, this effect tears the old
+	 * instance down and builds a new one against the freshly-rendered
+	 * markup. Simpler and more correct than partial-updating a live
+	 * playlist.
+	 */
+	useEffect(() => {
+		let cancelled = false;
+		let localInstance: { destroy?: () => void } | null = null;
 
-			/* The library is browser-only (it constructs a WaveformPlayer that
-			 * touches Web Audio / Canvas). Defer the import until we're actually
-			 * mounting client-side so SSR / RSC don't evaluate it on the server. */
-			void import('@arraypress/waveform-playlist')
-				.then((mod) => {
-					if (cancelled) return;
-					const host = hostRef.current;
-					if (!host) return;
+		/* The library is browser-only (it constructs a WaveformPlayer that
+		 * touches Web Audio / Canvas). Defer the import until we're actually
+		 * mounting client-side so SSR / RSC don't evaluate it on the server. */
+		void import('@arraypress/waveform-playlist')
+			.then((mod) => {
+				if (cancelled) return;
+				const host = hostRef.current;
+				if (!host) return;
 
-					/* ES modules only (2.0): `default` is always the class. */
-					const WaveformPlaylistClass = mod.default as unknown as {
-						new (el: HTMLElement, opts: Record<string, unknown>): { destroy?: () => void };
-					};
+				/* ES modules only (2.0): `default` is always the class. */
+				const WaveformPlaylistClass = mod.default as unknown as {
+					new (el: HTMLElement, opts: Record<string, unknown>): { destroy?: () => void };
+				};
 
-					if (typeof WaveformPlaylistClass !== 'function') {
-						console.error(
-							'[WaveformPlaylistReact] Failed to resolve WaveformPlaylist constructor from module.'
-						);
-						return;
-					}
-
-					const opts = buildPlaylistOptions(props);
-					for (const name of CALLBACK_PROPS) {
-						opts[name] = (...args: unknown[]) =>
-							(callbacksRef.current[name] as ((...a: unknown[]) => void) | null | undefined)?.(
-								...args
-							);
-					}
-
-					try {
-						localInstance = new WaveformPlaylistClass(host, opts);
-						instanceRef.current = localInstance;
-					} catch (err) {
-						/* The most common cause is a missing core player —
-						 * `window.WaveformPlayer` must be present before the
-						 * playlist constructs. Surface it clearly. */
-						console.error('[WaveformPlaylistReact] Failed to construct playlist:', err);
-					}
-				})
-				.catch((err) => {
-					console.error('[WaveformPlaylistReact] Failed to load library:', err);
-				});
-
-			return () => {
-				cancelled = true;
-				const current = localInstance ?? (instanceRef.current as { destroy?: () => void } | null);
-				if (current && typeof current.destroy === 'function') {
-					try {
-						current.destroy();
-					} catch (err) {
-						console.warn('[WaveformPlaylistReact] destroy() threw:', err);
-					}
+				if (typeof WaveformPlaylistClass !== 'function') {
+					console.error(
+						'[WaveformPlaylistReact] Failed to resolve WaveformPlaylist constructor from module.'
+					);
+					return;
 				}
-				instanceRef.current = null;
-			};
-			/* Re-mount on any construction-prop change. Listed exhaustively
-			 * (rather than spread) to make intent explicit and satisfy the lint
-			 * rule. `tracksKey` stands in for the `tracks` array. */
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-		}, [
-			tracksKey,
-			props.layout,
-			props.continuous,
-			props.expandChapters,
-			props.showDuration,
-			props.showChapterMarkers,
-			props.chapterMarkerColor,
-			props.showPlayState,
-			props.showArtist,
-			props.coverSize,
-			props.thumbnailSize,
-			props.density,
-			props.coverPosition,
-			props.barPosition,
-			props.preload,
-			props.crossOrigin,
-			props.waveformStyle,
-			props.height,
-			props.samples,
-			props.barWidth,
-			props.barSpacing,
-			props.barRadius,
-			props.waveformGradient,
-			props.seekHandle,
-			props.colorPreset,
-			props.waveformColor,
-			props.progressColor,
-			props.playbackRate,
-			props.showPlaybackSpeed,
-			props.playbackRates,
-			props.showControls,
-			props.showInfo,
-			props.artworkAlt,
-			props.unknownTrackText,
-			props.showTime,
-			props.showHoverTime,
-			props.showBPM,
-			props.bpm,
-			props.buttonAlign,
-			props.buttonStyle,
-			props.buttonSize,
-			props.buttonRadius,
-			props.artworkPosition,
-			props.accessibleSeek,
-			props.seekLabel,
-			props.seekValueText,
-			props.playPauseLabel,
-			props.speedLabel,
-			props.errorText,
-			props.showMarkers,
-			props.autoplay,
-			props.singlePlay,
-			props.playOnSeek,
-			props.enableMediaSession,
-			props.showVolume,
-			props.volume,
-			props.showDownload,
-			props.volumeLabel,
-			props.muteLabel,
-			props.downloadLabel,
-			props.playIcon,
-			props.pauseIcon,
-		]);
 
-		/**
-		 * Expose an imperative handle on the forwarded ref. Each method is a
-		 * thin pass-through to the live instance — calls before the instance
-		 * has mounted (still loading async) are no-ops.
-		 */
-		useImperativeHandle(
-			ref,
-			() => ({
-				selectTrack(index) {
-					const inst = instanceRef.current as { selectTrack?: (i: number) => void } | null;
-					inst?.selectTrack?.(index);
-				},
-				seekToChapter(trackIndex, time) {
-					const inst = instanceRef.current as {
-						seekToChapter?: (t: number, s: number) => void;
-					} | null;
-					inst?.seekToChapter?.(trackIndex, time);
-				},
-				nextTrack() {
-					const inst = instanceRef.current as { nextTrack?: () => void } | null;
-					inst?.nextTrack?.();
-				},
-				previousTrack() {
-					const inst = instanceRef.current as { previousTrack?: () => void } | null;
-					inst?.previousTrack?.();
-				},
-				getPlayer() {
-					const inst = instanceRef.current as { getPlayer?: () => unknown } | null;
-					return inst?.getPlayer?.() ?? null;
-				},
-				getCurrentTrackIndex() {
-					const inst = instanceRef.current as { getCurrentTrackIndex?: () => number } | null;
-					return inst?.getCurrentTrackIndex?.() ?? 0;
-				},
-				getTracks() {
-					const inst = instanceRef.current as {
-						getTracks?: () => WaveformPlaylistTrack[];
-					} | null;
-					return inst?.getTracks?.() ?? [];
-				},
-				get instance() {
-					return instanceRef.current as WaveformPlaylistInstance | null;
-				},
-			}),
-			[]
-		);
+				const opts = buildPlaylistOptions(props);
+				for (const name of CALLBACK_PROPS) {
+					opts[name] = (...args: unknown[]) =>
+						(callbacksRef.current[name] as ((...a: unknown[]) => void) | null | undefined)?.(
+							...args
+						);
+				}
 
-		return (
-			<div
-				ref={hostRef}
-				id={props.id}
-				/* Frozen at first render — see "Host `class` handling". */
-				className={renderedClass}
-				style={props.style}
-			>
-				{tracks.map((track, i) => (
-					<div
-						key={i}
-						data-track=""
-						data-url={track.url}
-						data-title={track.title}
-						data-artist={track.artist}
-						data-artwork={track.artwork}
-						data-album={track.album}
-						data-duration={track.duration === undefined ? undefined : String(track.duration)}
-						data-download-url={track.downloadUrl}
-						data-download-name={track.downloadName}
-						data-markers={track.markers ? JSON.stringify(track.markers) : undefined}
-						data-waveform={
-							Array.isArray(track.waveform) ? JSON.stringify(track.waveform) : track.waveform
-						}
-					>
-						{(track.chapters ?? []).map((chapter, ci) => (
-							<div
-								key={ci}
-								data-chapter=""
-								data-time={String(chapter.time)}
-								data-color={chapter.color}
-							>
-								{chapter.label}
-							</div>
-						))}
-					</div>
-				))}
-			</div>
-		);
-	}
-);
+				try {
+					localInstance = new WaveformPlaylistClass(host, opts);
+					instanceRef.current = localInstance;
+				} catch (err) {
+					/* The most common cause is a missing core player —
+					 * `window.WaveformPlayer` must be present before the
+					 * playlist constructs. Surface it clearly. */
+					console.error('[WaveformPlaylistReact] Failed to construct playlist:', err);
+				}
+			})
+			.catch((err) => {
+				console.error('[WaveformPlaylistReact] Failed to load library:', err);
+			});
+
+		return () => {
+			cancelled = true;
+			const current = localInstance ?? (instanceRef.current as { destroy?: () => void } | null);
+			if (current && typeof current.destroy === 'function') {
+				try {
+					current.destroy();
+				} catch (err) {
+					console.warn('[WaveformPlaylistReact] destroy() threw:', err);
+				}
+			}
+			instanceRef.current = null;
+		};
+		/* Re-mount on any construction-prop change. Listed exhaustively
+		 * (rather than spread) to make intent explicit and satisfy the lint
+		 * rule. `tracksKey` stands in for the `tracks` array. */
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		tracksKey,
+		props.layout,
+		props.continuous,
+		props.expandChapters,
+		props.showDuration,
+		props.showChapterMarkers,
+		props.chapterMarkerColor,
+		props.showPlayState,
+		props.showArtist,
+		props.coverSize,
+		props.thumbnailSize,
+		props.density,
+		props.coverPosition,
+		props.barPosition,
+		props.preload,
+		props.crossOrigin,
+		props.waveformStyle,
+		props.height,
+		props.samples,
+		props.barWidth,
+		props.barSpacing,
+		props.barRadius,
+		props.waveformGradient,
+		props.seekHandle,
+		props.colorPreset,
+		props.waveformColor,
+		props.progressColor,
+		props.playbackRate,
+		props.showPlaybackSpeed,
+		props.playbackRates,
+		props.showControls,
+		props.showInfo,
+		props.artworkAlt,
+		props.unknownTrackText,
+		props.showTime,
+		props.showHoverTime,
+		props.showBPM,
+		props.bpm,
+		props.buttonAlign,
+		props.buttonStyle,
+		props.buttonSize,
+		props.buttonRadius,
+		props.artworkPosition,
+		props.accessibleSeek,
+		props.seekLabel,
+		props.seekValueText,
+		props.playPauseLabel,
+		props.speedLabel,
+		props.errorText,
+		props.showMarkers,
+		props.autoplay,
+		props.singlePlay,
+		props.playOnSeek,
+		props.enableMediaSession,
+		props.showVolume,
+		props.volume,
+		props.showDownload,
+		props.volumeLabel,
+		props.muteLabel,
+		props.downloadLabel,
+		props.playIcon,
+		props.pauseIcon,
+	]);
+
+	/**
+	 * Expose an imperative handle on the `ref` prop. Each method is a
+	 * thin pass-through to the live instance — calls before the instance
+	 * has mounted (still loading async) are no-ops.
+	 */
+	useImperativeHandle(
+		ref,
+		() => ({
+			selectTrack(index) {
+				const inst = instanceRef.current as { selectTrack?: (i: number) => void } | null;
+				inst?.selectTrack?.(index);
+			},
+			seekToChapter(trackIndex, time) {
+				const inst = instanceRef.current as {
+					seekToChapter?: (t: number, s: number) => void;
+				} | null;
+				inst?.seekToChapter?.(trackIndex, time);
+			},
+			nextTrack() {
+				const inst = instanceRef.current as { nextTrack?: () => void } | null;
+				inst?.nextTrack?.();
+			},
+			previousTrack() {
+				const inst = instanceRef.current as { previousTrack?: () => void } | null;
+				inst?.previousTrack?.();
+			},
+			getPlayer() {
+				const inst = instanceRef.current as { getPlayer?: () => unknown } | null;
+				return inst?.getPlayer?.() ?? null;
+			},
+			getCurrentTrackIndex() {
+				const inst = instanceRef.current as { getCurrentTrackIndex?: () => number } | null;
+				return inst?.getCurrentTrackIndex?.() ?? 0;
+			},
+			getTracks() {
+				const inst = instanceRef.current as {
+					getTracks?: () => WaveformPlaylistTrack[];
+				} | null;
+				return inst?.getTracks?.() ?? [];
+			},
+			get instance() {
+				return instanceRef.current as WaveformPlaylistInstance | null;
+			},
+		}),
+		[]
+	);
+
+	return (
+		<div
+			ref={hostRef}
+			id={props.id}
+			/* Frozen at first render — see "Host `class` handling". */
+			className={renderedClass}
+			style={props.style}
+		>
+			{tracks.map((track, i) => (
+				<div
+					key={i}
+					data-track=""
+					data-url={track.url}
+					data-title={track.title}
+					data-artist={track.artist}
+					data-artwork={track.artwork}
+					data-album={track.album}
+					data-duration={track.duration === undefined ? undefined : String(track.duration)}
+					data-download-url={track.downloadUrl}
+					data-download-name={track.downloadName}
+					data-markers={track.markers ? JSON.stringify(track.markers) : undefined}
+					data-waveform={
+						Array.isArray(track.waveform) ? JSON.stringify(track.waveform) : track.waveform
+					}
+				>
+					{(track.chapters ?? []).map((chapter, ci) => (
+						<div
+							key={ci}
+							data-chapter=""
+							data-time={String(chapter.time)}
+							data-color={chapter.color}
+						>
+							{chapter.label}
+						</div>
+					))}
+				</div>
+			))}
+		</div>
+	);
+}

@@ -75,7 +75,6 @@
  * @module WaveformSounds
  */
 import {
-	forwardRef,
 	useEffect,
 	useId,
 	useImperativeHandle,
@@ -83,7 +82,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type ForwardedRef,
+	type Ref,
 } from 'react';
 import { renderSounds } from '@arraypress/waveform-sounds/render';
 // Aliased to avoid colliding with this file's own `WaveformSounds`
@@ -256,221 +255,57 @@ function syncHostClasses(el: HTMLElement, applied: readonly string[], wanted: re
  *   <WaveformSounds ref={ref} manifest="/sounds.json" onPlay={(s) => console.log(s.title)} />
  *   <button onClick={() => ref.current?.setFilter({ type: 'Bass' })}>Bass only</button>
  */
-export const WaveformSounds = forwardRef<WaveformSoundsHandle, WaveformSoundsProps>(
-	function WaveformSounds(props, ref: ForwardedRef<WaveformSoundsHandle>) {
-		const hostRef = useRef<HTMLDivElement | null>(null);
-		const instanceRef = useRef<WaveformSoundsInstance | null>(null);
+export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: Ref<WaveformSoundsHandle> }) {
+	const hostRef = useRef<HTMLDivElement | null>(null);
+	const instanceRef = useRef<WaveformSoundsInstance | null>(null);
 
-		/* Serialised identities for the array / object options, so an inline
-		 * literal re-mounts only when its contents change. */
-		const soundsKey = valueKey(props.sounds);
-		const filtersKey = valueKey(props.filters);
-		const sortsKey = valueKey(props.sorts);
-		const columnsKey = valueKey(props.columns);
-		const stringsKey = valueKey(props.strings);
-		const playerOptionsKey = valueKey(props.playerOptions);
-		const layout = props.player === 'strip' ? 'strip' : 'inline';
+	/* Serialised identities for the array / object options, so an inline
+	 * literal re-mounts only when its contents change. */
+	const soundsKey = valueKey(props.sounds);
+	const filtersKey = valueKey(props.filters);
+	const sortsKey = valueKey(props.sorts);
+	const columnsKey = valueKey(props.columns);
+	const stringsKey = valueKey(props.strings);
+	const playerOptionsKey = valueKey(props.playerOptions);
+	const layout = props.player === 'strip' ? 'strip' : 'inline';
 
-		/* Dropdown element ids. The core's own fallback is a hash of the
-		 * sounds, so two lists of the same sounds on one page would collide;
-		 * `useId()` is unique per component AND identical on the server and
-		 * the client, so the adopted markup's ids hold through hydration. */
-		const reactId = useId();
-		const idPrefix = props.idPrefix || props.id || idPrefixFrom(reactId);
+	/* Dropdown element ids. The core's own fallback is a hash of the
+	 * sounds, so two lists of the same sounds on one page would collide;
+	 * `useId()` is unique per component AND identical on the server and
+	 * the client, so the adopted markup's ids hold through hydration. */
+	const reactId = useId();
+	const idPrefix = props.idPrefix || props.id || idPrefixFrom(reactId);
 
-		/**
-		 * The server-rendered inner markup — the same `renderSounds` the
-		 * runtime would run, with the same render options, so what it adopts
-		 * matches what it would have built. Empty without `sounds` (a
-		 * `manifest` list is built client-side once fetched). Memoised on
-		 * the render inputs, and the `{ __html }` object with it: React only
-		 * rewrites `innerHTML` when that object changes, and a rewrite would
-		 * wipe the runtime's live rows.
-		 */
-		const html = useMemo(
-			() =>
-				props.sounds
-					? renderSounds(props.sounds, {
-							player: props.player,
-							search: props.search,
-							filters: props.filters,
-							sorts: props.sorts,
-							showCount: props.showCount,
-							menuSearch: props.menuSearch,
-							idPrefix,
-							loopToggle: props.loopToggle,
-							maxTypeChips: props.maxTypeChips,
-							pageSize: props.pageSize,
-							columns: props.columns,
-							strings: props.strings,
-						})
-					: '',
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[
-				soundsKey,
-				props.player,
-				props.search,
-				filtersKey,
-				sortsKey,
-				props.showCount,
-				props.menuSearch,
-				idPrefix,
-				props.loopToggle,
-				props.maxTypeChips,
-				props.pageSize,
-				columnsKey,
-				stringsKey,
-			]
-		);
-		const innerHtml = useMemo(() => ({ __html: html }), [html]);
-
-		/* The latest markup, for the re-mount reset in the effect cleanup
-		 * (which runs after this render's layout effects). */
-		const htmlRef = useRef(html);
-		useLayoutEffect(() => {
-			htmlRef.current = html;
-		}, [html]);
-
-		/**
-		 * Host `class` handling.
-		 *
-		 * The runtime may touch the host's class list (it adds
-		 * `waveform-sounds` / `waveform-sounds--<player>` when they are
-		 * missing, and `destroy()` takes back exactly what it added); other
-		 * scripts may too. If React owned the `class` attribute, a
-		 * `className`-only change (which rightly doesn't re-mount) would
-		 * rewrite it under the live instance. So React renders the class
-		 * ONCE: `renderedClass` is frozen at the first render (server markup
-		 * and hydration still carry every class, so the list is styled before
-		 * any script runs), and later changes are applied with `classList`,
-		 * touching only the tokens this component put there — including the
-		 * `waveform-sounds--<player>` swap when `player` changes. Same approach
-		 * as waveform-playlist-react.
-		 */
-		const hostClass = ['wfp-host', 'waveform-sounds', `waveform-sounds--${layout}`, props.className]
-			.filter(Boolean)
-			.join(' ');
-		const [renderedClass] = useState(hostClass);
-		const appliedClassesRef = useRef<string[]>(classTokens(renderedClass));
-		useLayoutEffect(() => {
-			const el = hostRef.current;
-			if (!el) return;
-			const wanted = classTokens(hostClass);
-			syncHostClasses(el, appliedClassesRef.current, wanted);
-			appliedClassesRef.current = wanted;
-		}, [hostClass]);
-
-		/* Latest callback props (and `playerOptions`, whose function values
-		 * are trampolined too). Read at call time, so swapping a handler takes
-		 * effect without a re-mount. Refreshed before paint on every render. */
-		const pickCallbacks = (): Callbacks =>
-			Object.fromEntries(CALLBACK_PROPS.map((name) => [name, props[name]])) as Callbacks;
-		const callbacksRef = useRef<Callbacks>(pickCallbacks());
-		const playerOptionsRef = useRef(props.playerOptions);
-		useLayoutEffect(() => {
-			callbacksRef.current = pickCallbacks();
-			playerOptionsRef.current = props.playerOptions;
-		});
-
-		/**
-		 * Mount / re-mount lifecycle.
-		 *
-		 * The dep array holds EVERY value option the runtime reads at
-		 * construction (arrays / objects by their serialised key). When any
-		 * changes, the old instance is torn down and a new one built against
-		 * the freshly-rendered markup.
-		 *
-		 * StrictMode's dev double-invoke (mount → cleanup → mount) never
-		 * constructs twice: the runtime is imported asynchronously, and the
-		 * first effect's cleanup cancels it before the import resolves.
-		 */
-		useEffect(() => {
-			let cancelled = false;
-			let localInstance: WaveformSoundsInstance | null = null;
-			/* Read when the import resolves, not now: under React 19
-			 * StrictMode the ref can still be detached while the replayed
-			 * effect runs. Kept for the cleanup's markup reset. */
-			let host: HTMLElement | null = null;
-
-			/* Browser-only (observers, canvas, the engine player). Deferred
-			 * until we're mounting client-side so SSR / RSC never evaluate it. */
-			void loadRuntime()
-				.then((mod) => {
-					if (cancelled) return;
-					host = hostRef.current;
-					if (!host) return;
-
-					/* ES modules only (2.0): `default` is always the class. */
-					const WaveformSoundsClass = mod.default as unknown;
-					if (typeof WaveformSoundsClass !== 'function') {
-						console.error('[WaveformSoundsReact] Failed to resolve WaveformSounds constructor from module.');
-						return;
-					}
-					const Ctor = WaveformSoundsClass as new (
-						el: HTMLElement,
-						opts: Record<string, unknown>
-					) => WaveformSoundsInstance;
-
-					const opts = buildSoundsOptions(props, idPrefix);
-
-					/* Engine callbacks inside playerOptions → trampolines. */
-					if (isPlainObject(props.playerOptions)) {
-						const engineOpts: Record<string, unknown> = { ...props.playerOptions };
-						for (const [name, value] of Object.entries(engineOpts)) {
-							if (typeof value !== 'function') continue;
-							engineOpts[name] = (...args: unknown[]) => {
-								const latest = playerOptionsRef.current as Record<string, unknown> | null | undefined;
-								const fn = isPlainObject(latest) ? latest[name] : undefined;
-								return typeof fn === 'function' ? (fn as AnyFn)(...args) : undefined;
-							};
-						}
-						opts.playerOptions = engineOpts;
-					}
-
-					/* The core builds on a microtask after `new` returns, so every
-					 * callback (onFilter / onReady included) fires after
-					 * `instanceRef` below is set — a handler can use the ref. */
-					for (const name of CALLBACK_PROPS) {
-						opts[name] = (...args: unknown[]) =>
-							(callbacksRef.current[name] as AnyFn | null | undefined)?.(...args);
-					}
-
-					try {
-						localInstance = new Ctor(host as HTMLElement, opts);
-						instanceRef.current = localInstance;
-					} catch (err) {
-						console.error('[WaveformSoundsReact] Failed to construct WaveformSounds:', err);
-					}
-				})
-				.catch((err) => {
-					console.error('[WaveformSoundsReact] Failed to load library:', err);
-				});
-
-			return () => {
-				cancelled = true;
-				const current = localInstance;
-				if (!current) return;
-				try {
-					current.destroy();
-				} catch (err) {
-					console.warn('[WaveformSoundsReact] destroy() threw:', err);
-				}
-				if (instanceRef.current === current) instanceRef.current = null;
-				/* Re-mount: hand the next instance clean markup. `destroy()`
-				 * leaves adopted rows in place WITH the old state on them (sort
-				 * order, hidden rows, playing classes, control values) — or, for
-				 * a list it built itself, restores the host to what it held
-				 * before, which may be stale markup. Unmount: host is detached,
-				 * nothing to do. */
-				if (host?.isConnected) host.innerHTML = htmlRef.current;
-			};
-			/* Re-mount on any construction-option change. Listed exhaustively
-			 * (rather than spread) to make intent explicit; the serialised
-			 * keys stand in for the array / object options. */
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-		}, [
+	/**
+	 * The server-rendered inner markup — the same `renderSounds` the
+	 * runtime would run, with the same render options, so what it adopts
+	 * matches what it would have built. Empty without `sounds` (a
+	 * `manifest` list is built client-side once fetched). Memoised on
+	 * the render inputs, and the `{ __html }` object with it: React only
+	 * rewrites `innerHTML` when that object changes, and a rewrite would
+	 * wipe the runtime's live rows.
+	 */
+	const html = useMemo(
+		() =>
+			props.sounds
+				? renderSounds(props.sounds, {
+						player: props.player,
+						search: props.search,
+						filters: props.filters,
+						sorts: props.sorts,
+						showCount: props.showCount,
+						menuSearch: props.menuSearch,
+						idPrefix,
+						loopToggle: props.loopToggle,
+						maxTypeChips: props.maxTypeChips,
+						pageSize: props.pageSize,
+						columns: props.columns,
+						strings: props.strings,
+					})
+				: '',
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[
 			soundsKey,
-			props.manifest,
 			props.player,
 			props.search,
 			filtersKey,
@@ -483,73 +318,235 @@ export const WaveformSounds = forwardRef<WaveformSoundsHandle, WaveformSoundsPro
 			props.pageSize,
 			columnsKey,
 			stringsKey,
-			props.waveformStyle,
-			props.waveformColor,
-			props.progressColor,
-			props.barWidth,
-			props.barGap,
-			props.loop,
-			props.autoAdvance,
-			props.arrowAudition,
-			props.urlState,
-			playerOptionsKey,
-			props.playerClass,
-		]);
+		]
+	);
+	const innerHtml = useMemo(() => ({ __html: html }), [html]);
 
-		/**
-		 * Imperative handle on the forwarded ref. Each method is a thin
-		 * pass-through to the live instance — calls before it has mounted
-		 * (the runtime loads asynchronously) are no-ops.
-		 */
-		useImperativeHandle(
-			ref,
-			() => ({
-				play(target, opts) {
-					instanceRef.current?.play(target, opts);
-				},
-				pause() {
-					instanceRef.current?.pause();
-				},
-				toggle(target) {
-					instanceRef.current?.toggle(target);
-				},
-				next() {
-					instanceRef.current?.next();
-				},
-				previous() {
-					instanceRef.current?.previous();
-				},
-				setFilter(patch) {
-					instanceRef.current?.setFilter(patch);
-				},
-				clearFilters() {
-					instanceRef.current?.clearFilters();
-				},
-				setSort(by) {
-					instanceRef.current?.setSort(by);
-				},
-				setLoop(on) {
-					instanceRef.current?.setLoop(on);
-				},
-				showMore() {
-					instanceRef.current?.showMore();
-				},
-				get instance() {
-					return instanceRef.current;
-				},
-			}),
-			[]
-		);
+	/* The latest markup, for the re-mount reset in the effect cleanup
+	 * (which runs after this render's layout effects). */
+	const htmlRef = useRef(html);
+	useLayoutEffect(() => {
+		htmlRef.current = html;
+	}, [html]);
 
-		return (
-			<div
-				ref={hostRef}
-				id={props.id}
-				/* Frozen at first render — see "Host `class` handling". */
-				className={renderedClass}
-				style={props.style}
-				dangerouslySetInnerHTML={innerHtml}
-			/>
-		);
-	}
-);
+	/**
+	 * Host `class` handling.
+	 *
+	 * The runtime may touch the host's class list (it adds
+	 * `waveform-sounds` / `waveform-sounds--<player>` when they are
+	 * missing, and `destroy()` takes back exactly what it added); other
+	 * scripts may too. If React owned the `class` attribute, a
+	 * `className`-only change (which rightly doesn't re-mount) would
+	 * rewrite it under the live instance. So React renders the class
+	 * ONCE: `renderedClass` is frozen at the first render (server markup
+	 * and hydration still carry every class, so the list is styled before
+	 * any script runs), and later changes are applied with `classList`,
+	 * touching only the tokens this component put there — including the
+	 * `waveform-sounds--<player>` swap when `player` changes. Same approach
+	 * as waveform-playlist-react.
+	 */
+	const hostClass = ['wfp-host', 'waveform-sounds', `waveform-sounds--${layout}`, props.className]
+		.filter(Boolean)
+		.join(' ');
+	const [renderedClass] = useState(hostClass);
+	const appliedClassesRef = useRef<string[]>(classTokens(renderedClass));
+	useLayoutEffect(() => {
+		const el = hostRef.current;
+		if (!el) return;
+		const wanted = classTokens(hostClass);
+		syncHostClasses(el, appliedClassesRef.current, wanted);
+		appliedClassesRef.current = wanted;
+	}, [hostClass]);
+
+	/* Latest callback props (and `playerOptions`, whose function values
+	 * are trampolined too). Read at call time, so swapping a handler takes
+	 * effect without a re-mount. Refreshed before paint on every render. */
+	const pickCallbacks = (): Callbacks =>
+		Object.fromEntries(CALLBACK_PROPS.map((name) => [name, props[name]])) as Callbacks;
+	const callbacksRef = useRef<Callbacks>(pickCallbacks());
+	const playerOptionsRef = useRef(props.playerOptions);
+	useLayoutEffect(() => {
+		callbacksRef.current = pickCallbacks();
+		playerOptionsRef.current = props.playerOptions;
+	});
+
+	/**
+	 * Mount / re-mount lifecycle.
+	 *
+	 * The dep array holds EVERY value option the runtime reads at
+	 * construction (arrays / objects by their serialised key). When any
+	 * changes, the old instance is torn down and a new one built against
+	 * the freshly-rendered markup.
+	 *
+	 * StrictMode's dev double-invoke (mount → cleanup → mount) never
+	 * constructs twice: the runtime is imported asynchronously, and the
+	 * first effect's cleanup cancels it before the import resolves.
+	 */
+	useEffect(() => {
+		let cancelled = false;
+		let localInstance: WaveformSoundsInstance | null = null;
+		/* Read when the import resolves, not now: under React 19
+		 * StrictMode the ref can still be detached while the replayed
+		 * effect runs. Kept for the cleanup's markup reset. */
+		let host: HTMLElement | null = null;
+
+		/* Browser-only (observers, canvas, the engine player). Deferred
+		 * until we're mounting client-side so SSR / RSC never evaluate it. */
+		void loadRuntime()
+			.then((mod) => {
+				if (cancelled) return;
+				host = hostRef.current;
+				if (!host) return;
+
+				/* ES modules only (2.0): `default` is always the class. */
+				const WaveformSoundsClass = mod.default as unknown;
+				if (typeof WaveformSoundsClass !== 'function') {
+					console.error('[WaveformSoundsReact] Failed to resolve WaveformSounds constructor from module.');
+					return;
+				}
+				const Ctor = WaveformSoundsClass as new (
+					el: HTMLElement,
+					opts: Record<string, unknown>
+				) => WaveformSoundsInstance;
+
+				const opts = buildSoundsOptions(props, idPrefix);
+
+				/* Engine callbacks inside playerOptions → trampolines. */
+				if (isPlainObject(props.playerOptions)) {
+					const engineOpts: Record<string, unknown> = { ...props.playerOptions };
+					for (const [name, value] of Object.entries(engineOpts)) {
+						if (typeof value !== 'function') continue;
+						engineOpts[name] = (...args: unknown[]) => {
+							const latest = playerOptionsRef.current as Record<string, unknown> | null | undefined;
+							const fn = isPlainObject(latest) ? latest[name] : undefined;
+							return typeof fn === 'function' ? (fn as AnyFn)(...args) : undefined;
+						};
+					}
+					opts.playerOptions = engineOpts;
+				}
+
+				/* The core builds on a microtask after `new` returns, so every
+				 * callback (onFilter / onReady included) fires after
+				 * `instanceRef` below is set — a handler can use the ref. */
+				for (const name of CALLBACK_PROPS) {
+					opts[name] = (...args: unknown[]) =>
+						(callbacksRef.current[name] as AnyFn | null | undefined)?.(...args);
+				}
+
+				try {
+					localInstance = new Ctor(host as HTMLElement, opts);
+					instanceRef.current = localInstance;
+				} catch (err) {
+					console.error('[WaveformSoundsReact] Failed to construct WaveformSounds:', err);
+				}
+			})
+			.catch((err) => {
+				console.error('[WaveformSoundsReact] Failed to load library:', err);
+			});
+
+		return () => {
+			cancelled = true;
+			const current = localInstance;
+			if (!current) return;
+			try {
+				current.destroy();
+			} catch (err) {
+				console.warn('[WaveformSoundsReact] destroy() threw:', err);
+			}
+			if (instanceRef.current === current) instanceRef.current = null;
+			/* Re-mount: hand the next instance clean markup. `destroy()`
+			 * leaves adopted rows in place WITH the old state on them (sort
+			 * order, hidden rows, playing classes, control values) — or, for
+			 * a list it built itself, restores the host to what it held
+			 * before, which may be stale markup. Unmount: host is detached,
+			 * nothing to do. */
+			if (host?.isConnected) host.innerHTML = htmlRef.current;
+		};
+		/* Re-mount on any construction-option change. Listed exhaustively
+		 * (rather than spread) to make intent explicit; the serialised
+		 * keys stand in for the array / object options. */
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		soundsKey,
+		props.manifest,
+		props.player,
+		props.search,
+		filtersKey,
+		sortsKey,
+		props.showCount,
+		props.menuSearch,
+		idPrefix,
+		props.loopToggle,
+		props.maxTypeChips,
+		props.pageSize,
+		columnsKey,
+		stringsKey,
+		props.waveformStyle,
+		props.waveformColor,
+		props.progressColor,
+		props.barWidth,
+		props.barGap,
+		props.loop,
+		props.autoAdvance,
+		props.arrowAudition,
+		props.urlState,
+		playerOptionsKey,
+		props.playerClass,
+	]);
+
+	/**
+	 * Imperative handle on the `ref` prop. Each method is a thin
+	 * pass-through to the live instance — calls before it has mounted
+	 * (the runtime loads asynchronously) are no-ops.
+	 */
+	useImperativeHandle(
+		ref,
+		() => ({
+			play(target, opts) {
+				instanceRef.current?.play(target, opts);
+			},
+			pause() {
+				instanceRef.current?.pause();
+			},
+			toggle(target) {
+				instanceRef.current?.toggle(target);
+			},
+			next() {
+				instanceRef.current?.next();
+			},
+			previous() {
+				instanceRef.current?.previous();
+			},
+			setFilter(patch) {
+				instanceRef.current?.setFilter(patch);
+			},
+			clearFilters() {
+				instanceRef.current?.clearFilters();
+			},
+			setSort(by) {
+				instanceRef.current?.setSort(by);
+			},
+			setLoop(on) {
+				instanceRef.current?.setLoop(on);
+			},
+			showMore() {
+				instanceRef.current?.showMore();
+			},
+			get instance() {
+				return instanceRef.current;
+			},
+		}),
+		[]
+	);
+
+	return (
+		<div
+			ref={hostRef}
+			id={props.id}
+			/* Frozen at first render — see "Host `class` handling". */
+			className={renderedClass}
+			style={props.style}
+			dangerouslySetInnerHTML={innerHtml}
+		/>
+	);
+}
