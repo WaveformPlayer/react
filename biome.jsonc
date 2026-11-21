@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "includes": ["src/**", "test/**", "examples/**", "*.ts"] },
+  "files": { "includes": ["src/**", "test/**", "examples/**", "scripts/**", "*.ts"] },
   // Off for 2.0: reformatting is its own change, once a style is chosen.
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
