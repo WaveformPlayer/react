@@ -65,6 +65,13 @@
   "author": "ArrayPress",
   "license": "MIT",
   "homepage": "https://waveformplayer.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WaveformPlayer/react.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WaveformPlayer/react/issues"
+  },
   "funding": {
     "type": "github",
     "url": "https://github.com/sponsors/arraypress"
