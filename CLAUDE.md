@@ -20,16 +20,23 @@ to build without every core installed. The cores are optional peers.
   `./player` and fail to bundle `./bar`. Run it when touching `exports`,
   `files`, `typesVersions` or the build. Needs network.
 
-## The cores are `file:` devDependencies — on purpose, for now
-`@arraypress/waveform-{player,bar,playlist,sounds}` are
-`file:../waveform-<name>`: the sibling checkouts on branch `ts` (2.0.0, not on
-npm yet). npm links them, so their real paths sit outside this repo; that is
-why `vitest.config.ts` sets `server.fs.allow` (the drift tests read the cores'
-files) and `server.deps.inline` for the player's `src/` (TypeScript with `.js`
-specifiers that only Vite resolves). The peers are `^2.0.0`. Once 2.0 is
-published, switch the devDependencies to `^2.0.0`; `test:pack` packs `file:`
-cores and installs anything else from npm, and the peer-range tests expect
-`file:` today (update them in the same change).
+## The cores are devDependencies at the published `^2.0.0`
+`@arraypress/waveform-{player,bar,playlist,sounds}` are devDependencies at
+`^2.0.0`, installed from npm (the lockfile resolves them from
+registry.npmjs.org; no `link: true` entries, no symlinks). The peers are
+`^2.0.0` too, and the peer-range tests check each devDependency is a `^2.x`
+range at least the peer floor. `vitest.config.ts` sets `server.deps.inline`
+for the player's `src/` (TypeScript with `.js` specifiers that only Vite
+resolves) and `server.fs.allow` for each core's directory (redundant inside
+node_modules, needed only for a `file:` link).
+
+For cross-repo work before a core release, a devDependency can temporarily
+be `file:../waveform-<name>` (`test:pack` packs a `file:` core and installs
+anything else from npm; the peer-range tests will fail until it's switched
+back). Switch it back to the published range and re-resolve the lock before
+publishing: `rm -rf node_modules/@arraypress/waveform-<name>` then
+`npm install --save-dev @arraypress/waveform-<name>@^2.x.y` (a plain
+`npm install` after editing package.json keeps the `link: true` entry).
 
 ## Toolchain
 TypeScript 7, tsdown, Vitest 5, Biome 2, React 19.3 — the newest each (checked
@@ -45,8 +52,8 @@ The prop **types** derive from the cores (`Omit<WaveformPlayerOptions, …>`,
 and then does nothing, because runtime forwarding is a hand-written
 allowlist. Each sub-path has a drift test that reads the installed core and
 fails until a new option is forwarded or listed in its `NOT_FORWARDED` map
-with a reason. After a core change, rerun the tests: they read the sibling
-checkout directly.
+with a reason. After a core release, update the devDependency and rerun the
+tests: they read the installed core's files.
 
 ### `./player` — `src/player/WaveformPlayer.tsx`
 A new option needs **both**:

@@ -22,9 +22,10 @@
  *      `./bar` there must fail: that is the reason each component has its own
  *      sub-path.
  *
- * The cores come from this package's devDependencies: a `file:` path (the
- * sibling 2.0 checkouts, until 2.0 is on npm) is packed and installed as a
- * tarball, anything else is installed from npm by that range.
+ * The cores come from this package's devDependencies: normally the
+ * published `^2.x` range, installed from npm. A `file:` path (a sibling
+ * checkout, used only temporarily for cross-repo work before a release) is
+ * packed and installed as a tarball instead.
  *
  * Needs network access for `npm install`. npm 12 prints `npm pack --json`
  * as an object keyed by package name; older npm prints an array. Both are
@@ -83,7 +84,7 @@ check(!files.some((f) => /\.(cjs|d\.cts)$/.test(f)), 'tarball has no CommonJS (.
 for (const f of ['README.md', 'LICENSE', 'CHANGELOG.md', 'package.json']) check(files.includes(f), `tarball has ${f}`);
 check(!files.some((f) => /^(src|test|examples|scripts)\//.test(f)), 'tarball has no src/, test/, examples/ or scripts/');
 
-/** What to `npm install` for a core: its packed sibling checkout, or its npm range. */
+/** What to `npm install` for a core: its npm range, or a packed `file:` checkout. */
 const coreSpec = Object.fromEntries(
 	CORES.map((name) => {
 		const range = pkg.devDependencies[name];

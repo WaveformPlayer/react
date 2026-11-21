@@ -16,9 +16,11 @@
  * `src/js/themes.ts` (imported for `DEFAULT_OPTIONS`). Two settings make
  * that work wherever the cores are installed:
  *
- *  - `server.fs.allow`: the cores are `file:` devDependencies, which npm
- *    links, so their real paths sit outside this repo and Vite would refuse
- *    to read them. Allowed: this repo plus each core's own directory.
+ *  - `server.fs.allow`: this repo plus each core's own directory. With the
+ *    published cores those sit inside node_modules (redundant but harmless);
+ *    it is kept for a temporary `file:` devDependency during cross-repo work,
+ *    which npm links, so its real path sits outside this repo and Vite would
+ *    otherwise refuse to read it.
  *  - `server.deps.inline` for the player core's `src/`: it is TypeScript
  *    with `.js` import specifiers, which only Vite resolves. From a normal
  *    (npm) install it would sit in node_modules, where Vitest hands files to
