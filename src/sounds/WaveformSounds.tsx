@@ -400,8 +400,8 @@ export const WaveformSounds = forwardRef<WaveformSoundsHandle, WaveformSoundsPro
 					host = hostRef.current;
 					if (!host) return;
 
-					const WaveformSoundsClass = (mod.default ??
-						(mod as { WaveformSounds?: unknown }).WaveformSounds) as unknown;
+					/* ES modules only (2.0): `default` is always the class. */
+					const WaveformSoundsClass = mod.default as unknown;
 					if (typeof WaveformSoundsClass !== 'function') {
 						console.error('[WaveformSoundsReact] Failed to resolve WaveformSounds constructor from module.');
 						return;

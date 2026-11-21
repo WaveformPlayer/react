@@ -356,8 +356,8 @@ export const WaveformPlaylist = forwardRef<WaveformPlaylistHandle, WaveformPlayl
 					const host = hostRef.current;
 					if (!host) return;
 
-					const WaveformPlaylistClass = (mod.default ??
-						(mod as { WaveformPlaylist?: unknown }).WaveformPlaylist) as {
+					/* ES modules only (2.0): `default` is always the class. */
+					const WaveformPlaylistClass = mod.default as unknown as {
 						new (el: HTMLElement, opts: Record<string, unknown>): { destroy?: () => void };
 					};
 

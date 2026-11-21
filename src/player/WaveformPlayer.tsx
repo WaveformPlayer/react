@@ -379,7 +379,10 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 					const container = containerRef.current;
 					if (!container) return;
 
-					const WaveformPlayerClass = (mod.default ?? (mod as { WaveformPlayer?: unknown }).WaveformPlayer) as {
+					/* The 2.0 core is ES modules only, so `import()` always
+					 * yields its namespace with a `default` (no CommonJS
+					 * interop shape to fall back from). */
+					const WaveformPlayerClass = mod.default as unknown as {
 						new (el: HTMLElement, opts: Record<string, unknown>): { destroy?: () => void };
 					};
 
