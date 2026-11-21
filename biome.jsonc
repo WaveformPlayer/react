@@ -1,0 +1,73 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["src/**", "test/**", "examples/**", "*.ts"] },
+  // Off for 2.0: reformatting is its own change, once a style is chosen.
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      // Same policy as the core (waveform-player, branch `ts`): 2.0 ships the
+      // 1.x wrappers' exact code, so every rule below is off because its fix
+      // would change emitted code, or because it contradicts something
+      // deliberate. Revisit them together after 2.0, each with its own tests.
+      "style": {
+        "noNonNullAssertion": "off", // deliberate: each `!` marks where the code relies on setup having run
+        "useTemplate": "off",
+        "useExponentiationOperator": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "useIterableCallbackReturn": "off", // expression-bodied forEach callbacks; a block body is different code
+        "noGlobalIsFinite": "off", // isFinite coerces, Number.isFinite does not: a behaviour change
+        "noPrototypeBuiltins": "off",
+        "noConfusingVoidType": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "off",
+        "noUnusedFunctionParameters": "off",
+        "useParseIntRadix": "off", // adding a radix changes how "0x..." parses
+        // Each effect's deps array is the wrapper's explicit remount list (the
+        // forwarding-drift tests check it against the forwarded options).
+        // "Exhaustive" deps would change when players are torn down and rebuilt.
+        "useExhaustiveDependencies": "off"
+      },
+      "complexity": {
+        "useOptionalChain": "off", // `a && a.b` and `a?.b` differ when a is 0 or ""
+        "noThisInStatic": "off",
+        "useLiteralKeys": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      // The server-rendered markup is the contract: React must treat the rows
+      // as opaque so it never reconciles what the runtime re-orders / hides.
+      "includes": ["src/sounds/WaveformSounds.tsx"],
+      "linter": { "rules": { "security": { "noDangerouslySetInnerHtml": "off" } } }
+    },
+    {
+      // Tracks and chapters are positional markup the playlist core parses;
+      // they have no stable id, and remounts rebuild the list anyway.
+      "includes": ["src/playlist/WaveformPlaylist.tsx"],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    },
+    {
+      // The stub is `new`ed by code under test; an arrow can't be a constructor.
+      "includes": ["test/playlist/setup.ts"],
+      "linter": { "rules": { "complexity": { "useArrowFunction": "off" } } }
+    },
+    {
+      // Deliberate: if ref.current were unset the assertion should throw.
+      "includes": ["test/playlist/WaveformPlaylist.test.tsx"],
+      "linter": { "rules": { "correctness": { "noUnsafeOptionalChaining": "off" } } }
+    },
+    {
+      // The examples are carried over unchanged from the 1.x repos.
+      "includes": ["examples/**"],
+      "linter": { "rules": { "a11y": { "useButtonType": "off" } } }
+    }
+  ]
+}
