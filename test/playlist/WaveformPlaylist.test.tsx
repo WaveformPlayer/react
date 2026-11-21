@@ -14,11 +14,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
 import { createRef } from 'react';
-import { WaveformPlaylist } from '../src/WaveformPlaylist';
+import { WaveformPlaylist } from '../../src/playlist/WaveformPlaylist';
 import type {
 	WaveformPlaylistHandle,
 	WaveformPlaylistTrackInput,
-} from '../src/types';
+} from '../../src/playlist/types';
 
 /**
  * Stub instance the mocked constructor returns. Each method records its

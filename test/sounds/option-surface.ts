@@ -13,7 +13,7 @@
  */
 // The installed core's declaration file, as text. A relative path (not the
 // package specifier) because the core doesn't export `./index.d.ts`.
-import soundsDts from '../node_modules/@arraypress/waveform-sounds/index.d.ts?raw';
+import soundsDts from '../../node_modules/@arraypress/waveform-sounds/index.d.ts?raw';
 
 /**
  * The property names declared directly on `export interface <name>` —

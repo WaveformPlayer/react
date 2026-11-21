@@ -8,7 +8,7 @@
  * `@arraypress/waveform-player@^1.24.5` for its engine.
  */
 import { describe, it, expect } from 'vitest';
-import pkg from '../package.json';
+import pkg from '../../package.json';
 
 /** The lowest version a `^x.y.z` range admits, as comparable numbers. */
 /** The lowest version a range accepts: `^x.y.z`, or a `||` union of them. */

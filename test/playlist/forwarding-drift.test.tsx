@@ -17,8 +17,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
-import { WaveformPlaylist } from '../src/WaveformPlaylist';
-import type { WaveformPlaylistProps } from '../src/types';
+import { WaveformPlaylist } from '../../src/playlist/WaveformPlaylist';
+import type { WaveformPlaylistProps } from '../../src/playlist/types';
 import { ALL_OPTIONS, PLAYER_OPTIONS, PLAYLIST_OPTIONS, isCallback } from './option-surface';
 
 /**

@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRef } from 'react';
 import { render, cleanup, fireEvent } from '@testing-library/react';
-import { WaveformBarTrigger } from '../src/WaveformBarTrigger';
+import { WaveformBarTrigger } from '../../src/bar/WaveformBarTrigger';
 
 beforeEach(cleanup);
 

@@ -16,8 +16,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
-import { WaveformSounds } from '../src/WaveformSounds';
-import type { WaveformSoundsProps } from '../src/types';
+import { WaveformSounds } from '../../src/sounds/WaveformSounds';
+import type { WaveformSoundsProps } from '../../src/sounds/types';
 import { ALL_OPTIONS, isCallback } from './option-surface';
 
 /**

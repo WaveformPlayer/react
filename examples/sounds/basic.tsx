@@ -26,7 +26,7 @@ import {
 	WaveformSounds,
 	type SoundInput,
 	type WaveformSoundsHandle,
-} from '@arraypress/waveform-sounds-react';
+} from '@arraypress/waveform-react/sounds';
 
 const PACK: SoundInput[] = [
 	{ url: '/previews/bass-01.mp3', title: 'Bass Loop 01', type: 'Bass', bpm: 128, key: 'F minor', duration: 8, peaks: '20406080a0806040' },

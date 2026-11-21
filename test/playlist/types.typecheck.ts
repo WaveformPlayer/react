@@ -11,7 +11,7 @@
  * `unknown` (or narrow back to `'list' | 'minimal'`) whichever core is
  * installed.
  */
-import type { WaveformPlaylistProps } from '../src/types';
+import type { WaveformPlaylistProps } from '../../src/playlist/types';
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

@@ -17,8 +17,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
-import { WaveformPlayer } from '../src/WaveformPlayer';
-import type { WaveformPlayerProps } from '../src/types';
+import { WaveformPlayer } from '../../src/player/WaveformPlayer';
+import type { WaveformPlayerProps } from '../../src/player/types';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isCallbackKey, loadCoreOptionKeys, loadCoreThemes, sampleValues } from './core-options';
@@ -142,7 +142,7 @@ describe('<WaveformPlayer> — forwarding drift vs the installed core', () => {
 describe('WaveformPlayerHandle docs vs the installed core', () => {
 	it('documents the setPlaybackRate range the core actually clamps to', async () => {
 		const { PLAYBACK_RATE_MIN, PLAYBACK_RATE_MAX } = await loadCoreThemes();
-		const src = readFileSync(fileURLToPath(import.meta.url).replace(/test\/[^/]+$/, 'src/types.ts'), 'utf8');
+		const src = readFileSync(fileURLToPath(import.meta.url).replace(/test\/player\/[^/]+$/, 'src/player/types.ts'), 'utf8');
 		const doc = /Set playback rate \(([\d.]+)\.\.([\d.]+)\b/.exec(src);
 		expect(doc, 'setPlaybackRate doc comment with a range').not.toBeNull();
 		expect([Number(doc![1]), Number(doc![2])]).toEqual([PLAYBACK_RATE_MIN, PLAYBACK_RATE_MAX]);

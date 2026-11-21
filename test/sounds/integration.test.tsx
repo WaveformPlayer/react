@@ -17,8 +17,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
 import { WaveformSounds as Core } from '@arraypress/waveform-sounds/no-autoinit';
-import { WaveformSounds } from '../src/WaveformSounds';
-import type { SoundInput, WaveformSoundsHandle, WaveformSoundsProps } from '../src/types';
+import { WaveformSounds } from '../../src/sounds/WaveformSounds';
+import type { SoundInput, WaveformSoundsHandle, WaveformSoundsProps } from '../../src/sounds/types';
 import { FakeEngine } from './engine';
 
 const SOUNDS: SoundInput[] = [

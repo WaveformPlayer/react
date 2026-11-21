@@ -27,7 +27,7 @@ import {
 	WaveformPlaylist,
 	type WaveformPlaylistHandle,
 	type WaveformPlaylistTrackInput,
-} from '@arraypress/waveform-playlist-react';
+} from '@arraypress/waveform-react/playlist';
 
 /* Example 1 — Minimal music playlist */
 export function MinimalExample() {

@@ -9,7 +9,7 @@
  * take the core's argument types.
  */
 import type { WaveformSoundsOptions } from '@arraypress/waveform-sounds';
-import type { SoundInput, WaveformSoundsHandle, WaveformSoundsProps } from '../src/types';
+import type { SoundInput, WaveformSoundsHandle, WaveformSoundsProps } from '../../src/sounds/types';
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

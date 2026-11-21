@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { WaveformSounds } from '../src/WaveformSounds';
+import { WaveformSounds } from '../../src/sounds/WaveformSounds';
 
 const SOUNDS = [
 	{ url: '/s/bass-01.mp3', title: 'Bass Loop 01', type: 'Bass', bpm: 128, key: 'Fm' },

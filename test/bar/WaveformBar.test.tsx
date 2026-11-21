@@ -9,8 +9,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
-import { WaveformBar } from '../src/WaveformBar';
-import type { WaveformBarConfig } from '../src/types';
+import { WaveformBar } from '../../src/bar/WaveformBar';
+import type { WaveformBarConfig } from '../../src/bar/types';
 
 /**
  * Records every `init()` and `destroy()` call so tests can assert

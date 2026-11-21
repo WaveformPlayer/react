@@ -15,7 +15,7 @@
  * Order matters — the bar has a strict runtime dependency on the
  * player, so load the player first.
  */
-import { WaveformBar, WaveformBarTrigger } from '@arraypress/waveform-bar-react';
+import { WaveformBar, WaveformBarTrigger } from '@arraypress/waveform-react/bar';
 
 /* Example 1 — App root. Render <WaveformBar> exactly once. */
 export function AppRoot() {

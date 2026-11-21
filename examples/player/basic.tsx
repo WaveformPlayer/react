@@ -21,7 +21,7 @@ import {
 	WaveformPlayer,
 	type WaveformPlayerHandle,
 	type WaveformMarker,
-} from '@arraypress/waveform-player-react';
+} from '@arraypress/waveform-react/player';
 
 /* Example 1 — Minimal */
 export function MinimalExample() {

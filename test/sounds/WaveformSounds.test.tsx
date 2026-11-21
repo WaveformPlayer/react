@@ -16,8 +16,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
 import { renderSounds } from '@arraypress/waveform-sounds/render';
-import { WaveformSounds } from '../src/WaveformSounds';
-import type { SoundInput, WaveformSoundsHandle } from '../src/types';
+import { WaveformSounds } from '../../src/sounds/WaveformSounds';
+import type { SoundInput, WaveformSoundsHandle } from '../../src/sounds/types';
 
 const makeStub = () => ({
 	destroy: vi.fn(),
