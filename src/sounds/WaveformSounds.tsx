@@ -35,11 +35,13 @@
  * For live changes without a re-mount use the ref handle (`setLoop`,
  * `setFilter`, `setSort`, …).
  *
- * On a re-mount the wrapper restores the freshly rendered markup after
- * `destroy()` and before the next instance constructs: by design the core
- * leaves ADOPTED markup in place on destroy, still carrying the old
- * instance's state (row order, hidden rows, playing classes, control
- * values), and a new instance must not adopt that.
+ * On a re-mount the next instance must not adopt the old one's state (row
+ * order, hidden rows, playing classes, control values), which the core
+ * leaves on ADOPTED markup by default. When the markup is unchanged, React
+ * leaves `innerHTML` alone, so the old instance is destroyed with
+ * `{ restore: true }` (the core puts the markup back as it arrived); when
+ * it changed, React has already written the fresh markup and a plain
+ * `destroy()` leaves it in place.
  *
  * ## Callbacks
  *
@@ -84,7 +86,7 @@ import {
 	useState,
 	type Ref,
 } from 'react';
-import { renderSounds } from '@arraypress/waveform-sounds/render';
+import { pickRenderOptions, renderSounds } from '@arraypress/waveform-sounds/render';
 // Aliased to avoid colliding with this file's own `WaveformSounds`
 // component export. This is the core library's class type.
 import type { WaveformSounds as WaveformSoundsInstance } from '@arraypress/waveform-sounds';
@@ -284,46 +286,23 @@ export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: 
 	 * the render inputs, and the `{ __html }` object with it: React only
 	 * rewrites `innerHTML` when that object changes, and a rewrite would
 	 * wipe the runtime's live rows.
+	 *
+	 * The render options are the core's own list (`pickRenderOptions`), not
+	 * a hand-kept one: the 2.0 wrapper's list lacked `loop`, so
+	 * `loop={false}` drew the Loop toggle pressed on the server, then
+	 * flipped on hydration. Serialised for the memo deps.
 	 */
+	const renderOptions = pickRenderOptions({ ...props, idPrefix });
+	const renderKey = valueKey(renderOptions);
 	const html = useMemo(
-		() =>
-			props.sounds
-				? renderSounds(props.sounds, {
-						player: props.player,
-						search: props.search,
-						filters: props.filters,
-						sorts: props.sorts,
-						showCount: props.showCount,
-						menuSearch: props.menuSearch,
-						idPrefix,
-						loopToggle: props.loopToggle,
-						maxTypeChips: props.maxTypeChips,
-						pageSize: props.pageSize,
-						columns: props.columns,
-						strings: props.strings,
-					})
-				: '',
+		() => (props.sounds ? renderSounds(props.sounds, renderOptions) : ''),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[
-			soundsKey,
-			props.player,
-			props.search,
-			filtersKey,
-			sortsKey,
-			props.showCount,
-			props.menuSearch,
-			idPrefix,
-			props.loopToggle,
-			props.maxTypeChips,
-			props.pageSize,
-			columnsKey,
-			stringsKey,
-		]
+		[soundsKey, renderKey]
 	);
 	const innerHtml = useMemo(() => ({ __html: html }), [html]);
 
-	/* The latest markup, for the re-mount reset in the effect cleanup
-	 * (which runs after this render's layout effects). */
+	/* The latest markup, for the effect cleanup's restore decision (the
+	 * cleanup runs after the next render's layout effects). */
 	const htmlRef = useRef(html);
 	useLayoutEffect(() => {
 		htmlRef.current = html;
@@ -385,17 +364,19 @@ export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: 
 	useEffect(() => {
 		let cancelled = false;
 		let localInstance: WaveformSoundsInstance | null = null;
-		/* Read when the import resolves, not now: under React 19
-		 * StrictMode the ref can still be detached while the replayed
-		 * effect runs. Kept for the cleanup's markup reset. */
-		let host: HTMLElement | null = null;
+		/* The markup this instance was built over, to tell at cleanup
+		 * whether React has since rewritten it. */
+		const builtHtml = htmlRef.current;
 
 		/* Browser-only (observers, canvas, the engine player). Deferred
 		 * until we're mounting client-side so SSR / RSC never evaluate it. */
 		void loadRuntime()
 			.then((mod) => {
 				if (cancelled) return;
-				host = hostRef.current;
+				/* Read when the import resolves, not at effect time: under
+				 * React 19 StrictMode the ref can still be detached while the
+				 * replayed effect runs. */
+				const host = hostRef.current;
 				if (!host) return;
 
 				/* ES modules only (2.0): `default` is always the class. */
@@ -434,7 +415,7 @@ export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: 
 				}
 
 				try {
-					localInstance = new Ctor(host as HTMLElement, opts);
+					localInstance = new Ctor(host, opts);
 					instanceRef.current = localInstance;
 				} catch (err) {
 					console.error('[WaveformSoundsReact] Failed to construct WaveformSounds:', err);
@@ -448,19 +429,20 @@ export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: 
 			cancelled = true;
 			const current = localInstance;
 			if (!current) return;
+			/* Re-mount: hand the next instance clean markup. Unchanged
+			 * markup still carries the old state (sort order, hidden rows,
+			 * playing classes, control values), so the core restores it as it
+			 * arrived; changed markup is React's fresh render, already in
+			 * place, which a plain destroy leaves alone. (A list the core
+			 * built itself — a manifest — is reset to what the host held
+			 * before either way; the next instance builds again.) Unmount:
+			 * the host is detached, the restore is harmless. */
 			try {
-				current.destroy();
+				current.destroy({ restore: htmlRef.current === builtHtml });
 			} catch (err) {
 				console.warn('[WaveformSoundsReact] destroy() threw:', err);
 			}
 			if (instanceRef.current === current) instanceRef.current = null;
-			/* Re-mount: hand the next instance clean markup. `destroy()`
-			 * leaves adopted rows in place WITH the old state on them (sort
-			 * order, hidden rows, playing classes, control values) — or, for
-			 * a list it built itself, restores the host to what it held
-			 * before, which may be stale markup. Unmount: host is detached,
-			 * nothing to do. */
-			if (host?.isConnected) host.innerHTML = htmlRef.current;
 		};
 		/* Re-mount on any construction-option change. Listed exhaustively
 		 * (rather than spread) to make intent explicit; the serialised

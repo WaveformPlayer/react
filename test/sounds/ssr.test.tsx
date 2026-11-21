@@ -34,6 +34,18 @@ describe('server rendering', () => {
 		expect(html).not.toContain('data-waveform-sounds');
 	});
 
+	it('renders the Loop toggle from the loop prop (a 2.0 bug drew it pressed for loop={false})', () => {
+		// A list that marks loops starts with the toggle on, unless `loop` says otherwise.
+		const loops = [
+			{ url: '/s/a.mp3', title: 'A', loop: true },
+			{ url: '/s/b.mp3', title: 'B' },
+		];
+		const pressed = (html: string) => /<button[^>]*data-ws-loop[\s>][^>]*aria-pressed="(\w+)"/.exec(html)?.[1];
+		expect(pressed(renderToString(<WaveformSounds sounds={loops} />))).toBe('true');
+		expect(pressed(renderToString(<WaveformSounds sounds={loops} loop={false} />))).toBe('false');
+		expect(pressed(renderToString(<WaveformSounds sounds={SOUNDS} loop />))).toBe('true');
+	});
+
 	it('emits an empty host for a manifest', () => {
 		const html = renderToString(<WaveformSounds manifest="/sounds.json" />);
 		expect(html).toBe('<div class="wfp-host waveform-sounds waveform-sounds--inline"></div>');

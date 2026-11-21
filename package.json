@@ -87,8 +87,8 @@
   "peerDependencies": {
     "@arraypress/waveform-bar": "^2.0.0",
     "@arraypress/waveform-player": "^2.0.0",
-    "@arraypress/waveform-playlist": "^2.0.0",
-    "@arraypress/waveform-sounds": "^2.0.0",
+    "@arraypress/waveform-playlist": "^2.1.0",
+    "@arraypress/waveform-sounds": "^2.1.0",
     "react": "^19.3.0"
   },
   "peerDependenciesMeta": {
@@ -117,9 +117,9 @@
   },
   "devDependencies": {
     "@arraypress/waveform-bar": "^2.0.0",
-    "@arraypress/waveform-player": "^2.0.0",
-    "@arraypress/waveform-playlist": "^2.0.0",
-    "@arraypress/waveform-sounds": "^2.0.0",
+    "@arraypress/waveform-player": "^2.1.0",
+    "@arraypress/waveform-playlist": "^2.1.0",
+    "@arraypress/waveform-sounds": "^2.1.0",
     "@biomejs/biome": "^2.6.8",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",

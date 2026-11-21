@@ -350,8 +350,11 @@ export function WaveformPlaylist({
 
 		/* The library is browser-only (it constructs a WaveformPlayer that
 		 * touches Web Audio / Canvas). Defer the import until we're actually
-		 * mounting client-side so SSR / RSC don't evaluate it on the server. */
-		void import('@arraypress/waveform-playlist')
+		 * mounting client-side so SSR / RSC don't evaluate it on the server.
+		 * `/no-autoinit`, never the root: since 2.1 the root scans the page
+		 * for `[data-waveform-playlist]` and registers `<waveform-playlist>`
+		 * on import. */
+		void import('@arraypress/waveform-playlist/no-autoinit')
 			.then((mod) => {
 				if (cancelled) return;
 				const host = hostRef.current;

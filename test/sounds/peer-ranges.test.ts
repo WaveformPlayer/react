@@ -2,11 +2,11 @@
  * test/peer-ranges.test.ts
  * ------------------------
  *
- * The peer floors are load-bearing, not cosmetic. The drift test reads the
- * option types from `types/types.d.ts`, which `@arraypress/waveform-sounds`
- * only ships from 2.0.0 (its `/render` and `/no-autoinit` entries date from
- * 0.1.0), and sounds 2.0 itself peers on `@arraypress/waveform-player@^2.0.0`
- * for its engine.
+ * The peer floors are load-bearing, not cosmetic. The server render takes
+ * its options from `pickRenderOptions()` and a re-mount uses
+ * `destroy({ restore: true })`, both added in `@arraypress/waveform-sounds`
+ * 2.1.0; sounds itself peers on `@arraypress/waveform-player@^2.0.0` for
+ * its engine.
  */
 import { describe, it, expect } from 'vitest';
 import pkg from '../../package.json';
@@ -27,8 +27,8 @@ const atLeast = (range: string, min: string): boolean => {
 };
 
 describe('peer dependency floors', () => {
-	it('requires waveform-sounds >= 2.0.0 (the 2.0 player engine and generated types)', () => {
-		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-sounds'], '2.0.0')).toBe(true);
+	it('requires waveform-sounds >= 2.1.0 (pickRenderOptions, destroy({ restore }))', () => {
+		expect(atLeast(pkg.peerDependencies['@arraypress/waveform-sounds'], '2.1.0')).toBe(true);
 	});
 
 	it("requires waveform-player >= 2.0.0 (the sounds core's own floor)", () => {
@@ -36,10 +36,13 @@ describe('peer dependency floors', () => {
 	});
 
 	it('develops against the published 2.0 packages (a ^2.x devDependency at least the peer floor)', () => {
-		for (const name of ['@arraypress/waveform-sounds', '@arraypress/waveform-player'] as const) {
+		for (const [name, min] of [
+			['@arraypress/waveform-sounds', '2.1.0'],
+			['@arraypress/waveform-player', '2.0.0'],
+		] as const) {
 			const range = pkg.devDependencies[name];
 			expect(floor(range)[0], `${name}@${range} is not a ^2.x range`).toBe(2);
-			expect(atLeast(range, '2.0.0'), `${name}@${range} < 2.0.0`).toBe(true);
+			expect(atLeast(range, min), `${name}@${range} < ${min}`).toBe(true);
 		}
 	});
 });

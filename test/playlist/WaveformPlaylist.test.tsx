@@ -59,6 +59,12 @@ const ctorCalls: Array<{
 const lifecycle: string[] = [];
 
 vi.mock('@arraypress/waveform-playlist', () => {
+	throw new Error(
+		'[test] component imported the scanning entry point; it must import @arraypress/waveform-playlist/no-autoinit'
+	);
+});
+
+vi.mock('@arraypress/waveform-playlist/no-autoinit', () => {
 	const WaveformPlaylistCtor = vi.fn(function (this: unknown, el: HTMLElement, opts: Record<string, unknown>) {
 		const stub = makeStub();
 		const n = ctorCalls.length;
@@ -109,7 +115,7 @@ const TWO_TRACKS: WaveformPlaylistTrackInput[] = [
 ];
 
 /**
- * Wait for the component's dynamic `import('@arraypress/waveform-playlist')`
+ * Wait for the component's dynamic `import('@arraypress/waveform-playlist/no-autoinit')`
  * to resolve and the constructor mock to fire. The whole chain (effect
  * run → import → .then callback) is microtask-scheduled, so we poll with
  * testing-library's `waitFor`.

@@ -51,15 +51,18 @@ vi.mock('@arraypress/waveform-sounds/no-autoinit', () => {
 		const n = ctorCalls.length;
 		/* Model the runtime's DOM contract: adopt the rows, add only the
 		 * classes the host lacks (destroy() takes back exactly those), mutate
-		 * row state, and leave adopted rows as they are on destroy. */
+		 * row state, and leave adopted rows as they are on destroy — unless
+		 * `{ restore: true }`, which puts the markup back as it arrived. */
+		const arrived = el.innerHTML;
 		const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-ws-index]'));
 		const added = ['waveform-sounds', `waveform-sounds--${opts.player === 'strip' ? 'strip' : 'inline'}`].filter(
 			(c) => !el.classList.contains(c)
 		);
 		el.classList.add(...added);
 		rows.forEach((r) => r.classList.add(`touched-by-${n}`));
-		stub.destroy.mockImplementation(() => {
+		stub.destroy.mockImplementation((options?: { restore?: boolean }) => {
 			lifecycle.push(`destroy:${n}`);
+			if (options?.restore) el.innerHTML = arrived;
 			el.classList.remove(...added);
 		});
 		lifecycle.push(`construct:${n}`);
@@ -208,14 +211,15 @@ describe('<WaveformSounds> — lifecycle', () => {
 	});
 
 	it('hands a re-mount clean markup, not the old instance\'s mutated rows', async () => {
-		// `loop` doesn't change the markup, so React leaves innerHTML alone;
-		// the wrapper must still reset what the old instance touched.
+		// `autoAdvance` doesn't change the markup, so React leaves innerHTML
+		// alone; the wrapper must still reset what the old instance touched.
 		const { rerender, container } = render(<WaveformSounds sounds={SOUNDS} />);
 		await waitForMount();
 		expect(container.querySelector('.touched-by-0')).not.toBeNull();
 
-		rerender(<WaveformSounds sounds={SOUNDS} loop />);
+		rerender(<WaveformSounds sounds={SOUNDS} autoAdvance />);
 		await waitForMount(2);
+		expect(ctorCalls[0].stub.destroy).toHaveBeenCalledWith({ restore: true });
 		expect(container.querySelector('.touched-by-0')).toBeNull();
 		expect(container.querySelector('.touched-by-1')).not.toBeNull();
 	});

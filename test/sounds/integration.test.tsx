@@ -94,7 +94,7 @@ describe('integration — mount', () => {
 		const onReady = vi.fn();
 		const { container } = render(<WaveformSounds manifest="/sounds.json" onReady={onReady} />);
 		await waitFor(() => expect(onReady).toHaveBeenCalled());
-		expect(fetchMock).toHaveBeenCalledWith('/sounds.json');
+		expect(fetchMock).toHaveBeenCalledWith('/sounds.json', expect.anything());
 		expect(rows(container.firstElementChild as HTMLElement)).toHaveLength(2);
 	});
 

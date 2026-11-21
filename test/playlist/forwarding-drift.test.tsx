@@ -58,6 +58,12 @@ const CALLBACKS = FORWARDED.filter(isCallback);
 const ctorCalls: Array<Record<string, unknown>> = [];
 
 vi.mock('@arraypress/waveform-playlist', () => {
+	throw new Error(
+		'[test] component imported the scanning entry point; it must import @arraypress/waveform-playlist/no-autoinit'
+	);
+});
+
+vi.mock('@arraypress/waveform-playlist/no-autoinit', () => {
 	const Ctor = vi.fn(function (this: { destroy: () => void }, el: HTMLElement, opts: Record<string, unknown>) {
 		ctorCalls.push(opts);
 		this.destroy = () => {};

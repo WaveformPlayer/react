@@ -20,12 +20,14 @@ to build without every core installed. The cores are optional peers.
   `./player` and fail to bundle `./bar`. Run it when touching `exports`,
   `files`, `typesVersions` or the build. Needs network.
 
-## The cores are devDependencies at the published `^2.0.0`
-`@arraypress/waveform-{player,bar,playlist,sounds}` are devDependencies at
-`^2.0.0`, installed from npm (the lockfile resolves them from
-registry.npmjs.org; no `link: true` entries, no symlinks). The peers are
-`^2.0.0` too, and the peer-range tests check each devDependency is a `^2.x`
-range at least the peer floor. `vitest.config.ts` sets `server.deps.inline`
+## The cores are devDependencies at the published ranges
+`@arraypress/waveform-{player,playlist,sounds}` are devDependencies at
+`^2.1.0` and `-bar` at `^2.0.0`, installed from npm (the lockfile resolves
+them from registry.npmjs.org; no `link: true` entries, no symlinks). The
+peers are `^2.0.0` except `-playlist` and `-sounds` at `^2.1.0` (the
+`/no-autoinit` playlist entry, `pickRenderOptions`, `destroy({ restore })`),
+and the peer-range tests check each devDependency is a `^2.x` range at
+least the peer floor. `vitest.config.ts` sets `server.deps.inline`
 for the player's `src/` (TypeScript with `.js` specifiers that only Vite
 resolves) and `server.fs.allow` for each core's directory (redundant inside
 node_modules, needed only for a `file:` link).
@@ -89,6 +91,9 @@ a new option with a `null` default needs a sample pair in
 
 ### `./playlist` — `src/playlist/WaveformPlaylist.tsx`
 Same two edits as the player (`buildPlaylistOptions` + remount deps).
+Loads `@arraypress/waveform-playlist/no-autoinit`, never the root (since 2.1
+it scans the page and registers `<waveform-playlist>`); the behaviour and
+drift suites mock the root to throw.
 Forward a new *player* option only if the playlist passes it to its player.
 `test/playlist/forwarding-drift.test.tsx` covers `WaveformPlaylistOptions` ∪
 `WaveformPlayerOptions` (both cores' `types/types.d.ts`).
@@ -120,8 +125,11 @@ as `data-wb-*`.
 
 ### `./sounds` — `src/sounds/WaveformSounds.tsx`
 1. `buildSoundsOptions` allowlist; 2. the mount effect's deps (`valueKey()`
-for arrays / objects); 3. if it shapes the markup, pass it to `renderSounds`
-and the `html` memo deps. `test/sounds/forwarding-drift.test.tsx` reads
+for arrays / objects). The server render needs no edit: its options are the
+core's `pickRenderOptions()` (keyed for the memo by `valueKey`). A re-mount
+destroys with `{ restore: true }` when the markup is unchanged (React left
+the old instance's state on it); when it changed React already wrote the
+fresh markup, which a plain `destroy()` leaves. `test/sounds/forwarding-drift.test.tsx` reads
 `WaveformSoundsOptions` from the core's `types/types.d.ts`; `NOT_FORWARDED`
 is empty. The server markup is the contract (`test/sounds/ssr.test.tsx`,
 plus hydration in `WaveformSounds.test.tsx`); `idPrefix` must never depend
