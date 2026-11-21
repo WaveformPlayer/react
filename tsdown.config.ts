@@ -38,11 +38,17 @@ export default defineConfig({
 	clean: true,
 	treeshake: true,
 	minify: false,
-	// Each entry has a named export and a default export. `named` is what
-	// tsup (esbuild) always emitted: `exports.X` + `exports.default`. Being
-	// explicit silences Rolldown's MIXED_EXPORTS warning; the output is the
-	// same as its `auto` mode.
-	outputOptions: { exports: 'named' },
+	// CJS output options, set to match what tsup (esbuild) emitted:
+	// - `exports: 'named'`: `exports.X` + `exports.default`. Same output as
+	//   Rolldown's `auto` here; explicit to silence its MIXED_EXPORTS warning.
+	// - `strict: true`: tsup's CJS began with "use strict". Rolldown's default
+	//   (`auto`) omits it, which would run the CJS build in sloppy mode.
+	// - `generatedCode.symbols: false`: no `Symbol.toStringTag: 'Module'` on
+	//   the CJS exports object, which tsup never added.
+	// `__esModule` is left at Rolldown's default, which already matches tsup:
+	// set when the entry has a default export (player, playlist, sounds),
+	// absent for bar. (None of these change the ESM output.)
+	outputOptions: { exports: 'named', strict: true, generatedCode: { symbols: false } },
 	deps: {
 		neverBundle: [/^react(-dom)?(\/|$)/, /^@arraypress\/waveform-(player|bar|playlist|sounds)(\/|$)/],
 	},
