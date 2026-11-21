@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 — Unreleased
+## 2.0.0 — 2026-11-21
 
 The four React wrappers in one package, one sub-path per component, built
 for the 2.0 cores and React 19.3+:
