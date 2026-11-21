@@ -24,7 +24,12 @@
  *   ColorPreset,
  *   AudioMode,
  *   AudioPreload,
+ *   AudioCrossOrigin,
  *   ButtonAlign,
+ *   WaveformSeekEventDetail,
+ *   WaveformRateChangeEventDetail,
+ *   WaveformVolumeChangeEventDetail,
+ *   WaveformLoopEventDetail,
  * } from '@arraypress/waveform-react/player';
  * ```
  */
@@ -41,5 +46,10 @@ export type {
 	ColorPreset,
 	AudioMode,
 	AudioPreload,
+	AudioCrossOrigin,
 	ButtonAlign,
+	WaveformSeekEventDetail,
+	WaveformRateChangeEventDetail,
+	WaveformVolumeChangeEventDetail,
+	WaveformLoopEventDetail,
 } from './types';
