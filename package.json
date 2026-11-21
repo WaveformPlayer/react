@@ -1,6 +1,6 @@
 {
   "name": "@arraypress/waveform-react",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "React components for WaveformPlayer: player, bar, playlist and sounds, one sub-path each. Install only the cores you use.",
   "type": "module",
   "exports": {
