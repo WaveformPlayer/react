@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.2.0 — 2026-11-22
+
+For `@arraypress/waveform-sounds` 2.2.0 (the other cores are unchanged).
+
+### Added — sounds (`./sounds`)
+- **`mergeEnharmonicKeys`** is forwarded to the core and re-mounts on a
+  change. The server markup honours it too (its render options are the
+  core's `pickRenderOptions()`), so `mergeEnharmonicKeys={false}` renders
+  A#m and Bbm as two key-menu entries on the server and keeps them apart
+  after hydration.
+
+### Changed
+- **Peers**: `@arraypress/waveform-sounds` is `^2.2.0`. The server markup is
+  now 2.2's — rows carry only `data-ws-index`, every sound rides once in a
+  `<script type="application/json" data-ws-sounds>`, and only the rows the
+  list starts with are rendered — which a 2.1 runtime can't adopt. The JSON
+  script sits inside the host's opaque `dangerouslySetInnerHTML`, so it
+  hydrates without a mismatch. Code that read a row's `data-title` /
+  `data-url` / … should use the instance's sounds instead.
+
 ## 2.1.0 — 2026-11-21
 
 For the 2.1 cores (`@arraypress/waveform-player`, `-playlist` and `-sounds`

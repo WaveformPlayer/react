@@ -186,6 +186,7 @@ function buildSoundsOptions(props: WaveformSoundsProps, idPrefix: string): Recor
 	if (props.pageSize !== undefined) opts.pageSize = props.pageSize;
 	if (props.columns !== undefined) opts.columns = props.columns;
 	if (props.strings !== undefined) opts.strings = props.strings;
+	if (props.mergeEnharmonicKeys !== undefined) opts.mergeEnharmonicKeys = props.mergeEnharmonicKeys;
 
 	/* Row waveform */
 	if (props.waveformStyle !== undefined) opts.waveformStyle = props.waveformStyle;
@@ -463,6 +464,7 @@ export function WaveformSounds({ ref, ...props }: WaveformSoundsProps & { ref?: 
 		props.pageSize,
 		columnsKey,
 		stringsKey,
+		props.mergeEnharmonicKeys,
 		props.waveformStyle,
 		props.waveformColor,
 		props.progressColor,

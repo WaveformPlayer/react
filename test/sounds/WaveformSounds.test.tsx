@@ -37,7 +37,7 @@ const ctorCalls: Array<{
 	el: HTMLElement;
 	opts: Record<string, unknown>;
 	stub: ReturnType<typeof makeStub> & { instance: unknown };
-	/** `data-title` of each row the instance found at construction. */
+	/** The title (`.ws-title-text`) of each row the instance found at construction. */
 	adoptedTitles: string[];
 }> = [];
 
@@ -66,7 +66,7 @@ vi.mock('@arraypress/waveform-sounds/no-autoinit', () => {
 			el.classList.remove(...added);
 		});
 		lifecycle.push(`construct:${n}`);
-		ctorCalls.push({ el, opts, stub, adoptedTitles: rows.map((r) => r.dataset.title ?? '') });
+		ctorCalls.push({ el, opts, stub, adoptedTitles: rows.map((r) => r.querySelector('.ws-title-text')?.textContent ?? '') });
 		Object.assign(this, stub);
 		// Like the core: built on a microtask after `new` returns.
 		void Promise.resolve().then(() => (opts.onReady as ((i: unknown) => void) | undefined)?.(this));
@@ -114,7 +114,7 @@ describe('<WaveformSounds> — host and markup', () => {
 		// A per-sound `download` reaches the markup: a link on that row only.
 		const links = host.querySelectorAll<HTMLAnchorElement>('a[download]');
 		expect(links).toHaveLength(1);
-		expect(links[0].closest('[data-ws-index]')).toHaveAttribute('data-title', 'Crash');
+		expect(links[0].closest('[data-ws-index]')!.querySelector('.ws-title-text')!.textContent).toBe('Crash');
 		expect(links[0].getAttribute('href')).toBe('/dl/crash.wav');
 	});
 
@@ -330,6 +330,9 @@ describe('<WaveformSounds> — idPrefix', () => {
 		container.innerHTML = renderToString(tree);
 		document.body.appendChild(container);
 		const serverIds = menuIds(container);
+		// 2.2's markup carries the sounds as an inert JSON script — part of the
+		// opaque innerHTML, so it must not trip a hydration mismatch.
+		expect(container.querySelectorAll('script[type="application/json"][data-ws-sounds]')).toHaveLength(2);
 
 		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const onRecoverableError = vi.fn();
@@ -341,6 +344,7 @@ describe('<WaveformSounds> — idPrefix', () => {
 		expect(onRecoverableError).not.toHaveBeenCalled();
 		expect(errors).not.toHaveBeenCalled();
 		expect(menuIds(container)).toEqual(serverIds);
+		expect(container.querySelectorAll('script[type="application/json"][data-ws-sounds]')).toHaveLength(2);
 		expect(ctorCalls.map((c) => c.opts.idPrefix)).toEqual(
 			[...container.querySelectorAll('[data-ws-menu="sort"]')].map((m) => m.querySelector('[id]')!.id.replace(/-sort.*$/, ''))
 		);

@@ -21,11 +21,13 @@ to build without every core installed. The cores are optional peers.
   `files`, `typesVersions` or the build. Needs network.
 
 ## The cores are devDependencies at the published ranges
-`@arraypress/waveform-{player,playlist,sounds}` are devDependencies at
-`^2.1.0` and `-bar` at `^2.0.0`, installed from npm (the lockfile resolves
-them from registry.npmjs.org; no `link: true` entries, no symlinks). The
-peers are `^2.0.0` except `-playlist` and `-sounds` at `^2.1.0` (the
-`/no-autoinit` playlist entry, `pickRenderOptions`, `destroy({ restore })`),
+`@arraypress/waveform-{player,playlist}` are devDependencies at `^2.1.0`,
+`-sounds` at `^2.2.0` and `-bar` at `^2.0.0`, installed from npm (the
+lockfile resolves them from registry.npmjs.org; no `link: true` entries, no
+symlinks). The peers are `^2.0.0` except `-playlist` at `^2.1.0` (the
+`/no-autoinit` entry) and `-sounds` at `^2.2.0` (2.2's markup — rows carry
+only `data-ws-index`, the sounds ride in one JSON script — plus
+`pickRenderOptions`, `destroy({ restore })`, `mergeEnharmonicKeys`),
 and the peer-range tests check each devDependency is a `^2.x` range at
 least the peer floor. `vitest.config.ts` sets `server.deps.inline`
 for the player's `src/` (TypeScript with `.js` specifiers that only Vite

@@ -49,7 +49,12 @@ async function mount(props: Partial<WaveformSoundsProps> = {}) {
 }
 
 const rows = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('[data-ws-index]')];
-const visibleTitles = (host: HTMLElement) => rows(host).filter((r) => !r.hidden).map((r) => r.dataset.title);
+/* 2.2: a row carries only `data-ws-index`, and rows not shown aren't in the
+ * DOM — the shown list is the rendered rows, titled by `.ws-title-text`. */
+const visibleTitles = (host: HTMLElement) =>
+	rows(host)
+		.filter((r) => !r.hidden)
+		.map((r) => r.querySelector('.ws-title-text')?.textContent);
 
 describe('integration — mount', () => {
 	it('adopts the rows React rendered instead of rebuilding them', async () => {
@@ -332,5 +337,73 @@ describe('integration — re-mount', () => {
 		expect(host).toHaveClass('waveform-sounds', 'waveform-sounds--strip');
 		expect(host).not.toHaveClass('waveform-sounds--inline');
 		expect(host.querySelector('.ws-wave')).toBeNull();
+	});
+});
+
+describe('integration — mergeEnharmonicKeys (2.2), server render → hydration', () => {
+	/* A#m and Bbm are one key unless `mergeEnharmonicKeys={false}`. The
+	 * server markup takes its key menu from `pickRenderOptions`, and the
+	 * runtime that hydrates over it must agree — or the menu the reader saw
+	 * changes (or a filter finds a different set) once the script runs. */
+	const ENHARMONIC: SoundInput[] = [
+		{ url: '/s/a.mp3', title: 'Sharp', type: 'Bass', key: 'A#m' },
+		{ url: '/s/b.mp3', title: 'Flat', type: 'Bass', key: 'Bbm' },
+		{ url: '/s/c.mp3', title: 'Plain', type: 'Keys', key: 'C' },
+	];
+	const keyOptions = (root: ParentNode) =>
+		[...root.querySelectorAll('[data-ws-menu="key"] [role=option]')].map((o) => o.getAttribute('data-value'));
+
+	async function serverThenHydrate(props: Partial<WaveformSoundsProps>) {
+		const { renderToString } = await import('react-dom/server');
+		const { hydrateRoot } = await import('react-dom/client');
+		const { act } = await import('react');
+		const ref = createRef<WaveformSoundsHandle>();
+		const onReady = vi.fn();
+		const tree = (
+			<WaveformSounds ref={ref} sounds={ENHARMONIC} playerClass={FakeEngine} onReady={onReady} {...props} />
+		);
+		const container = document.createElement('div');
+		container.innerHTML = renderToString(tree);
+		document.body.appendChild(container);
+		const serverKeys = keyOptions(container);
+		/* The sound data rides in one inert JSON script inside the
+		 * dangerouslySetInnerHTML markup; React must hydrate over it cleanly. */
+		expect(container.querySelectorAll('script[type="application/json"][data-ws-sounds]')).toHaveLength(1);
+
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const onRecoverableError = vi.fn();
+		let root: ReturnType<typeof hydrateRoot> | undefined;
+		await act(async () => {
+			root = hydrateRoot(container, tree, { onRecoverableError });
+		});
+		await waitFor(() => expect(onReady).toHaveBeenCalled());
+		expect(onRecoverableError).not.toHaveBeenCalled();
+		expect(errors).not.toHaveBeenCalled();
+		errors.mockRestore();
+		const host = container.firstElementChild as HTMLElement;
+		const teardown = async () => {
+			await act(async () => root!.unmount());
+			container.remove();
+		};
+		return { host, ref, serverKeys, teardown };
+	}
+
+	it('mergeEnharmonicKeys={false} renders the spellings apart on the server and keeps them apart after hydration', async () => {
+		const { host, ref, serverKeys, teardown } = await serverThenHydrate({ mergeEnharmonicKeys: false });
+		expect(serverKeys).toEqual(['', 'C', 'A#m', 'Bbm']);
+		expect(ref.current!.instance!.options.mergeEnharmonicKeys).toBe(false);
+		expect(keyOptions(host)).toEqual(serverKeys);
+		ref.current!.setFilter({ key: 'A#m' });
+		expect(visibleTitles(host)).toEqual(['Sharp']);
+		await teardown();
+	});
+
+	it('by default the spellings are one key, on the server and after hydration', async () => {
+		const { host, ref, serverKeys, teardown } = await serverThenHydrate({});
+		expect(serverKeys).toEqual(['', 'C', 'Bbm']);
+		expect(keyOptions(host)).toEqual(serverKeys);
+		ref.current!.setFilter({ key: 'A#m' });
+		expect(visibleTitles(host)).toEqual(['Sharp', 'Flat']);
+		await teardown();
 	});
 });

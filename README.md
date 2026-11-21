@@ -23,8 +23,8 @@ There is no root import. Each component loads its core with a dynamic
 combined entry would fail to build unless every core were installed. The cores
 are optional peer dependencies for the same reason.
 
-Every core is 2.0 or later; `./playlist` and `./sounds` need
-`@arraypress/waveform-playlist` / `-sounds` 2.1 or later. Each sub-path exports what the old
+Every core is 2.0 or later; `./playlist` needs `@arraypress/waveform-playlist`
+2.1 or later and `./sounds` needs `@arraypress/waveform-sounds` 2.2 or later. Each sub-path exports what the old
 single-component package exported (`@arraypress/waveform-player-react` and the
 others): same names, props, refs and types, plus the 2.0 additions in the
 CHANGELOG. Moving over means changing the import path.

@@ -1,6 +1,6 @@
 {
   "name": "@arraypress/waveform-react",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "React components for WaveformPlayer: player, bar, playlist and sounds, one sub-path each. Install only the cores you use.",
   "type": "module",
   "exports": {
@@ -88,7 +88,7 @@
     "@arraypress/waveform-bar": "^2.0.0",
     "@arraypress/waveform-player": "^2.0.0",
     "@arraypress/waveform-playlist": "^2.1.0",
-    "@arraypress/waveform-sounds": "^2.1.0",
+    "@arraypress/waveform-sounds": "^2.2.0",
     "react": "^19.3.0"
   },
   "peerDependenciesMeta": {
@@ -119,7 +119,7 @@
     "@arraypress/waveform-bar": "^2.0.0",
     "@arraypress/waveform-player": "^2.1.0",
     "@arraypress/waveform-playlist": "^2.1.0",
-    "@arraypress/waveform-sounds": "^2.1.0",
+    "@arraypress/waveform-sounds": "^2.2.0",
     "@biomejs/biome": "^2.6.8",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
