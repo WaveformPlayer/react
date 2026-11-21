@@ -53,3 +53,7 @@ export type {
 	WaveformVolumeChangeEventDetail,
 	WaveformLoopEventDetail,
 } from './types';
+
+// JSX typing for the core's <waveform-player> element (a `declare module
+// 'react'` augmentation, so any import from this sub-path brings it in).
+export type { WaveformPlayerElementAttributes, WaveformPlayerElementProps } from './element';
