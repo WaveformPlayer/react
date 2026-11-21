@@ -64,6 +64,21 @@ import type { WaveformPlayer as WaveformPlayerInstance } from '@arraypress/wavef
 import type { WaveformPlayerHandle, WaveformPlayerProps } from './types';
 
 /**
+ * The 2.0 events exposed as props, by the `waveformplayer:<name>` event the
+ * core dispatches on the host. The core has no callback options for them,
+ * so the component listens on the host and calls the prop with the event's
+ * `detail`.
+ */
+const EVENT_PROPS = {
+	seek: 'onSeek',
+	ratechange: 'onRateChange',
+	volumechange: 'onVolumeChange',
+	loop: 'onLoop',
+} as const;
+
+type EventProp = (typeof EVENT_PROPS)[keyof typeof EVENT_PROPS];
+
+/**
  * Convert a `WaveformPlayerProps` object into the option shape the
  * core library accepts. Most fields pass straight through; this
  * helper exists so the option-building logic is testable on its own
@@ -279,19 +294,7 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 		 * effect's deps, so updating a callback does NOT tear the player
 		 * down.
 		 */
-		const callbacksRef = useRef<
-			Pick<
-				WaveformPlayerProps,
-				| 'onLoad'
-				| 'onPlay'
-				| 'onPause'
-				| 'onEnd'
-				| 'onTimeUpdate'
-				| 'onError'
-				| 'onNextTrack'
-				| 'onPreviousTrack'
-			>
-		>({
+		const pickCallbacks = () => ({
 			onLoad: props.onLoad,
 			onPlay: props.onPlay,
 			onPause: props.onPause,
@@ -300,21 +303,17 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 			onError: props.onError,
 			onNextTrack: props.onNextTrack,
 			onPreviousTrack: props.onPreviousTrack,
+			onSeek: props.onSeek,
+			onRateChange: props.onRateChange,
+			onVolumeChange: props.onVolumeChange,
+			onLoop: props.onLoop,
 		});
+		const callbacksRef = useRef(pickCallbacks());
 
 		/* Refresh the ref on every render (before paint) so the stable
 		 * wrappers below always read the latest handlers. */
 		useLayoutEffect(() => {
-			callbacksRef.current = {
-				onLoad: props.onLoad,
-				onPlay: props.onPlay,
-				onPause: props.onPause,
-				onEnd: props.onEnd,
-				onTimeUpdate: props.onTimeUpdate,
-				onError: props.onError,
-				onNextTrack: props.onNextTrack,
-				onPreviousTrack: props.onPreviousTrack,
-			};
+			callbacksRef.current = pickCallbacks();
 		});
 
 		/**
@@ -343,6 +342,22 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 		useEffect(() => {
 			let cancelled = false;
 			let localInstance: { destroy?: () => void } | null = null;
+
+			/* The 2.0 events (`onSeek`, …): one listener per event on the
+			 * host, for this player's lifetime, calling the latest prop. Only
+			 * this effect's own player counts — never one from before a
+			 * remount. */
+			const host = containerRef.current;
+			const eventListeners = Object.entries(EVENT_PROPS).map(([name, prop]) => {
+				const listener = (event: Event) => {
+					const detail = (event as CustomEvent<{ player?: unknown }>).detail;
+					if (!localInstance || detail?.player !== localInstance) return;
+					(callbacksRef.current[prop as EventProp] as ((d: unknown) => void) | undefined)?.(detail);
+				};
+				const type = `waveformplayer:${name}`;
+				host?.addEventListener(type, listener);
+				return () => host?.removeEventListener(type, listener);
+			});
 
 			/* The library is browser-only. Defer the import until we're
 			 * actually mounting client-side so SSR / RSC don't try to
@@ -412,6 +427,7 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 
 			return () => {
 				cancelled = true;
+				for (const remove of eventListeners) remove();
 				const current = localInstance ?? (instanceRef.current as { destroy?: () => void } | null);
 				if (current && typeof current.destroy === 'function') {
 					try {
@@ -427,7 +443,9 @@ export const WaveformPlayer = forwardRef<WaveformPlayerHandle, WaveformPlayerPro
 			 * lint rule happy. Callbacks intentionally NOT in deps:
 			 * a parent re-rendering with a fresh inline function
 			 * shouldn't tear the player down — only the *presence* of the
-			 * track-navigation handlers is (see `hasNextTrack`).
+			 * track-navigation handlers is (see `hasNextTrack`). The event
+			 * props (`onSeek`, …) aren't either: their listeners read the
+			 * latest prop.
 			 * test/forwarding-drift.test.tsx fails if a forwarded option
 			 * is missing here. */
 			// eslint-disable-next-line react-hooks/exhaustive-deps

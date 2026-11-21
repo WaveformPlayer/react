@@ -6,17 +6,19 @@
  * The shared option surface — `WaveformStyle`, `ColorPreset`,
  * `AudioMode`, `AudioPreload`, `ButtonAlign`, `WaveformMarker`,
  * `WaveformPeaks`, and the full per-option list behind
- * `WaveformPlayerProps` — is now owned by the core library and
- * re-exported / extended here rather than re-declared. The core's
- * hand-authored `index.d.ts` is the single source of truth, so this
- * wrapper can never drift out of sync with it.
+ * `WaveformPlayerProps` — is owned by the core library and re-exported /
+ * extended here rather than re-declared. The core generates its
+ * declarations from its TypeScript source, so they are the single source
+ * of truth and this wrapper's types can never drift out of sync with them.
  *
  * This module only adds the React-specific surface:
  *
  *   - Callback props (`onLoad`, `onPlay`, `onPause`, `onTimeUpdate`,
  *     `onEnd`, `onError`, `onNextTrack`, `onPreviousTrack`) that map to
  *     the library's same-named option fields but receive the typed
- *     `WaveformPlayer` instance.
+ *     `WaveformPlayer` instance, and the 2.0 event props (`onSeek`,
+ *     `onRateChange`, `onVolumeChange`, `onLoop`), which receive the
+ *     `detail` of the core's `waveformplayer:*` event.
  *   - DOM pass-through (`className`, `style`, `id`).
  *   - A `WaveformPlayerHandle` exposed via `ref` for imperative
  *     control (`loadTrack`, `seekTo`, `setVolume`, etc.).
@@ -27,6 +29,10 @@ import type {
 	WaveformPlayer,
 	WaveformPlayerOptions,
 	WaveformPeaks,
+	WaveformSeekEventDetail,
+	WaveformRateChangeEventDetail,
+	WaveformVolumeChangeEventDetail,
+	WaveformLoopEventDetail,
 } from '@arraypress/waveform-player';
 
 /**
@@ -44,6 +50,10 @@ export type {
 	ButtonAlign,
 	WaveformMarker,
 	WaveformPeaks,
+	WaveformSeekEventDetail,
+	WaveformRateChangeEventDetail,
+	WaveformVolumeChangeEventDetail,
+	WaveformLoopEventDetail,
 } from '@arraypress/waveform-player';
 
 /**
@@ -177,6 +187,35 @@ export interface WaveformPlayerProps
 	onNextTrack?: (instance: WaveformPlayer) => void;
 	/** Media Session "previous track" handler — the skip-back counterpart of `onNextTrack`. */
 	onPreviousTrack?: (instance: WaveformPlayer) => void;
+
+	// ── 2.0 events ─────────────────────────────────────────────────────
+	// The core has no callback options for these; it dispatches them as
+	// `waveformplayer:<name>` events on the host, and the component calls
+	// the prop with the event's `detail` (which carries `player` and `url`).
+	// All four concern the player's own `<audio>`, so none fires in
+	// `audioMode: 'external'`. Like the callbacks above, a new handler
+	// never re-creates the player.
+
+	/**
+	 * The audio landed on a new position — a click or key on the waveform, a
+	 * marker, `seekTo()`, and the wrap of a whole-track `loop`.
+	 * `waveformplayer:seek`.
+	 */
+	onSeek?: (detail: WaveformSeekEventDetail) => void;
+	/** The playback rate changed (the speed menu or `setPlaybackRate()`). `waveformplayer:ratechange`. */
+	onRateChange?: (detail: WaveformRateChangeEventDetail) => void;
+	/**
+	 * The volume or muted state changed (the `showVolume` controls, the `m`
+	 * key, `setVolume()` / `setMuted()`). `waveformplayer:volumechange`.
+	 */
+	onVolumeChange?: (detail: WaveformVolumeChangeEventDetail) => void;
+	/**
+	 * The loop state changed (the `showLoop` toggle, `toggleLoop()`,
+	 * `setLoop()`, `loopMarker()`, `clearLoop()`). `detail.loop` is
+	 * whole-track looping; `start` / `end` the section loop, or `null`.
+	 * `waveformplayer:loop`.
+	 */
+	onLoop?: (detail: WaveformLoopEventDetail) => void;
 
 	// ── React-specific extras ──────────────────────────────────────────
 

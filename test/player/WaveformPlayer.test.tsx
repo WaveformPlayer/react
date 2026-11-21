@@ -283,6 +283,78 @@ describe('<WaveformPlayer> — 2.0 options', () => {
 	});
 });
 
+describe('<WaveformPlayer> — 2.0 events', () => {
+	const fire = (el: HTMLElement, name: string, detail: Record<string, unknown>) =>
+		el.dispatchEvent(new CustomEvent(`waveformplayer:${name}`, { bubbles: true, detail }));
+
+	/** The player the component constructed: what the core puts in `detail.player`. */
+	async function constructedPlayer(): Promise<unknown> {
+		const Ctor = (await import('@arraypress/waveform-player/no-autoinit')).default as unknown as {
+			mock: { instances: unknown[] };
+		};
+		return Ctor.mock.instances.at(-1);
+	}
+
+	it('calls onSeek / onRateChange / onVolumeChange / onLoop with the event detail', async () => {
+		const handlers = { onSeek: vi.fn(), onRateChange: vi.fn(), onVolumeChange: vi.fn(), onLoop: vi.fn() };
+		render(<WaveformPlayer url="/audio/a.mp3" {...handlers} />);
+		await waitForMount();
+		const { el } = ctorCalls[0];
+		const instance = await constructedPlayer();
+
+		const seek = { player: instance, url: '/audio/a.mp3', currentTime: 12, duration: 187 };
+		const rate = { player: instance, url: '/audio/a.mp3', playbackRate: 1.5 };
+		const volume = { player: instance, url: '/audio/a.mp3', volume: 0.5, muted: false };
+		const loop = { player: instance, url: '/audio/a.mp3', loop: false, start: 10, end: 20 };
+		fire(el, 'seek', seek);
+		fire(el, 'ratechange', rate);
+		fire(el, 'volumechange', volume);
+		fire(el, 'loop', loop);
+
+		expect(handlers.onSeek).toHaveBeenCalledWith(seek);
+		expect(handlers.onRateChange).toHaveBeenCalledWith(rate);
+		expect(handlers.onVolumeChange).toHaveBeenCalledWith(volume);
+		expect(handlers.onLoop).toHaveBeenCalledWith(loop);
+	});
+
+	it('ignores events from another player (a destroyed one, or a nested one)', async () => {
+		const onSeek = vi.fn();
+		render(<WaveformPlayer url="/audio/a.mp3" onSeek={onSeek} />);
+		await waitForMount();
+		fire(ctorCalls[0].el, 'seek', { player: {}, currentTime: 1, duration: 2 });
+		expect(onSeek).not.toHaveBeenCalled();
+	});
+
+	it('reaches the latest handler without remounting, and stops on unmount', async () => {
+		const first = vi.fn();
+		const { rerender, unmount } = render(<WaveformPlayer url="/audio/a.mp3" onLoop={first} />);
+		await waitForMount();
+		const instance = await constructedPlayer();
+		const { el } = ctorCalls[0];
+
+		const second = vi.fn();
+		rerender(<WaveformPlayer url="/audio/a.mp3" onLoop={second} />);
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		expect(ctorCalls).toHaveLength(1);
+
+		fire(el, 'loop', { player: instance, loop: true, start: null, end: null });
+		expect(second).toHaveBeenCalledTimes(1);
+		expect(first).not.toHaveBeenCalled();
+
+		unmount();
+		fire(el, 'loop', { player: instance, loop: false, start: null, end: null });
+		expect(second).toHaveBeenCalledTimes(1);
+	});
+
+	it('passes no event props to the core as options', async () => {
+		render(
+			<WaveformPlayer url="/audio/a.mp3" onSeek={vi.fn()} onRateChange={vi.fn()} onVolumeChange={vi.fn()} onLoop={vi.fn()} />
+		);
+		await waitForMount();
+		for (const key of ['onSeek', 'onRateChange', 'onVolumeChange', 'onLoop']) expect(key in ctorCalls[0].opts, key).toBe(false);
+	});
+});
+
 describe('<WaveformPlayer> — Media Session track navigation', () => {
 	it('forwards onNextTrack / onPreviousTrack as wrappers that reach the current handler', async () => {
 		const onNextTrack = vi.fn();
